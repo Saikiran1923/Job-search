@@ -11,5 +11,6 @@ dist/
 
 # Real candidate/application data can contain personal information.
 data/candidate_profile.json
+data/application_answers.json
 applications/*
 !applications/.gitkeep

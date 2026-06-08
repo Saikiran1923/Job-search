@@ -10,6 +10,15 @@ def _contains_term(text: str, term: str) -> bool:
     return normalize_text(term) in normalize_text(text)
 
 
+def _score_text(text: str, job_skills: list[str], keyword_candidates: list[str]) -> int:
+    skills = set(extract_known_skills(text))
+    matched_skills = [skill for skill in job_skills if skill.lower() in skills]
+    skill_score = len(matched_skills) / len(job_skills) if job_skills else 0.75
+    keyword_matches = [term for term in keyword_candidates if _contains_term(text, term)]
+    keyword_score = len(keyword_matches) / len(keyword_candidates) if keyword_candidates else 0.75
+    return max(0, min(100, round((skill_score * 0.7 + keyword_score * 0.3) * 100)))
+
+
 def select_role_bullets(
     role_library: RoleLibrary,
     job_text: str,
@@ -42,12 +51,14 @@ def score_job(
     job: JobPosting,
     role_library: RoleLibrary,
     threshold: int = 85,
+    suggested_answers: dict[str, str] | None = None,
 ) -> JobAnalysis:
     """Compare the job description with the candidate profile and return a score."""
 
     profile_text = profile.resume_text()
     job_text = "\n".join([job.role, job.title, job.description])
     job_skills = extract_known_skills(job_text)
+    keyword_candidates = important_terms(job_text, limit=20)
     profile_skills = extract_known_skills(profile_text) + list(profile.all_skill_terms())
     profile_skill_set = {skill.lower() for skill in profile_skills}
 
@@ -56,24 +67,8 @@ def score_job(
     selected_bullets = select_role_bullets(role_library, job_text, missing_skills)
 
     optimized_text = "\n".join([profile_text, *selected_bullets])
-    optimized_skills = set(extract_known_skills(optimized_text)) | {
-        skill.lower() for skill in profile.all_skill_terms()
-    }
-    optimized_matches = [skill for skill in job_skills if skill.lower() in optimized_skills]
-
-    if job_skills:
-        skill_score = len(optimized_matches) / len(job_skills)
-    else:
-        skill_score = 0.75
-
-    keyword_candidates = important_terms(job_text, limit=20)
-    keyword_matches = [
-        term for term in keyword_candidates if _contains_term(optimized_text, term)
-    ]
-    keyword_score = len(keyword_matches) / len(keyword_candidates) if keyword_candidates else 0.75
-
-    score = round((skill_score * 0.7 + keyword_score * 0.3) * 100)
-    score = max(0, min(100, score))
+    original_score = _score_text(profile_text, job_skills, keyword_candidates)
+    score = _score_text(optimized_text, job_skills, keyword_candidates)
 
     if score >= threshold:
         decision = "prepare"
@@ -91,10 +86,13 @@ def score_job(
     return JobAnalysis(
         job=job,
         ats_score=score,
+        original_ats_score=original_score,
+        optimized_ats_score=score,
         matched_skills=matched_skills,
         missing_skills=missing_skills,
         important_keywords=keyword_candidates,
         selected_bullets=selected_bullets,
+        suggested_answers=suggested_answers or {},
         decision=decision,
         decision_reason=reason,
     )

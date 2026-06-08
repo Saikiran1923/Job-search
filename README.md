@@ -18,9 +18,10 @@ The assistant is designed to prepare high-quality application materials from a s
 - Reads job postings from JSON exports or manually saved job descriptions.
 - Extracts required skills and high-signal keywords.
 - Compares each job with the stored candidate profile.
-- Calculates an ATS-style match score.
+- Calculates original and optimized ATS-style match scores.
 - Selects relevant bullets from `data/roles/{role}.json` or `/data/roles/{role}.json`.
 - Generates a tailored resume and cover letter for jobs that pass or need review.
+- Reuses saved application answers for repeated questions with multiple-choice options.
 - Tracks applications in JSONL with:
   - job role
   - company name
@@ -36,13 +37,13 @@ The assistant is designed to prepare high-quality application materials from a s
 This project uses only the Python standard library.
 
 ```bash
-python -m job_assistant.cli --help
+python3 -m job_assistant.cli --help
 ```
 
 Optionally install the CLI entrypoint:
 
 ```bash
-python -m pip install -e .
+python3 -m pip install -e .
 job-assistant --help
 ```
 
@@ -51,7 +52,7 @@ job-assistant --help
 Create an editable profile:
 
 ```bash
-python -m job_assistant.cli init-profile
+python3 -m job_assistant.cli init-profile
 ```
 
 Then edit:
@@ -61,6 +62,41 @@ data/candidate_profile.json
 ```
 
 If a mounted profile exists at `/data/candidate_profile.json`, the CLI uses it by default. Otherwise it uses `data/candidate_profile.json`.
+
+## Application answer bank
+
+Create an editable answer bank:
+
+```bash
+python3 -m job_assistant.cli init-answers
+```
+
+Then edit:
+
+```text
+data/application_answers.json
+```
+
+Add or replace one answer from the CLI:
+
+```bash
+python3 -m job_assistant.cli answers add \
+  --question "Will you now or in the future require sponsorship?" \
+  --answer "No" \
+  --options Yes No \
+  --keywords sponsorship visa \
+  --replace
+```
+
+Test answer matching:
+
+```bash
+python3 -m job_assistant.cli answers match \
+  --question "Do you require visa sponsorship now or in the future?" \
+  --options Yes No
+```
+
+When a job entry includes `application_questions`, the process command adds matching saved answers to the result and tracking record for reuse.
 
 ## Role bullet libraries
 
@@ -84,19 +120,55 @@ Bullets should only describe experience the candidate can truthfully claim. When
 ## Generate all-IT search links
 
 ```bash
-python -m job_assistant.cli search-links --all-it --location "Remote"
+python3 -m job_assistant.cli search-links --all-it --location "Remote"
+```
+
+List selectable IT role categories and sub-roles:
+
+```bash
+python3 -m job_assistant.cli roles
 ```
 
 Use specific roles:
 
 ```bash
-python -m job_assistant.cli search-links "Data Engineer" "Backend Developer" --location "Dallas, TX"
+python3 -m job_assistant.cli search-links "Data Engineer" "Backend Developer" --location "Dallas, TX"
+```
+
+Use a role category with sub-roles:
+
+```bash
+python3 -m job_assistant.cli search-links \
+  --categories "Data and AI" "Cloud and DevOps" \
+  --location "Remote"
 ```
 
 Limit platforms:
 
 ```bash
-python -m job_assistant.cli search-links --all-it --platforms linkedin indeed dice
+python3 -m job_assistant.cli search-links --all-it --platforms linkedin indeed dice
+```
+
+## Portal-by-portal search process
+
+Generate an ordered plan that checks each portal one by one for the selected roles:
+
+```bash
+python3 -m job_assistant.cli search-plan \
+  --categories "Data and AI" \
+  --location "Remote" \
+  --platforms linkedin glassdoor dice monster indeed careerbuilder ziprecruiter company_portals
+```
+
+Each step includes:
+
+- platform
+- role/sub-role
+- search URL
+- suggested minimum manual review time, default `180` seconds
+- note to save relevant job descriptions for processing
+
+This command plans the search flow. It does not scrape protected pages or submit applications.
 ```
 
 ## Process job postings
@@ -108,13 +180,15 @@ Create a jobs JSON file using `data/jobs/jobs.example.json` as a template. Each 
 - `company`
 - `url`
 - `description`
+- optional `application_questions`
 
 Run:
 
 ```bash
-python -m job_assistant.cli process \
+python3 -m job_assistant.cli process \
   --profile data/candidate_profile.json \
   --jobs data/jobs/jobs.example.json \
+  --answers data/application_answers.json \
   --threshold 85
 ```
 
@@ -143,6 +217,22 @@ If you want reposts or distinct URLs at the same company and role to be processe
 
 Different roles at the same company are processed separately.
 
+## End-to-end safe process notes
+
+1. Create your real candidate profile with `init-profile`.
+2. Edit `data/candidate_profile.json`.
+3. Create reusable application answers with `init-answers` and `answers add`.
+4. List all IT roles/sub-roles with `roles`.
+5. Pick roles or categories for search.
+6. Generate a portal-by-portal plan with `search-plan`.
+7. Open each portal/search URL, review jobs, and save relevant descriptions into a jobs JSON file.
+8. Run `process` to check the original resume ATS score and optimized score.
+9. If missing skills are found, the assistant selects truthful matching bullets from `data/roles/{role}.json`.
+10. Review the generated resume, cover letter, and suggested answers.
+11. Submit through the official job application page or approved API after review.
+
+The assistant records prepared applications so the same company + same role is not processed again unless `--allow-reposts` is used.
+
 ## Safety and compliance
 
 This tool intentionally avoids:
@@ -151,6 +241,6 @@ This tool intentionally avoids:
 - bot-detection evasion
 - fake mouse or keyboard behavior
 - credential handling for job sites
-- automatic third-party form submission without user review
+- automatic third-party form submission without user review or an official approved API
 
 Use it to prepare accurate materials and organize applications. Submit through official channels and verify each tailored claim before applying.

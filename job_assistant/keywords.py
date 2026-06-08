@@ -6,25 +6,68 @@ import re
 from collections import Counter
 
 
-ALL_IT_ROLES = [
-    "Software Engineer",
-    "Backend Developer",
-    "Frontend Developer",
-    "Full Stack Developer",
-    "Data Engineer",
-    "Azure Data Engineer",
-    "Data Scientist",
-    "Machine Learning Engineer",
-    "DevOps Engineer",
-    "Cloud Engineer",
-    "Cybersecurity Analyst",
-    "QA Engineer",
-    "Business Intelligence Analyst",
-    "Database Administrator",
-    "Systems Administrator",
-    "Network Engineer",
-    "IT Support Specialist",
-]
+ROLE_CATALOG = {
+    "Software Development": [
+        "Software Engineer",
+        "Backend Developer",
+        "Frontend Developer",
+        "Full Stack Developer",
+        "Java Developer",
+        "Python Developer",
+        ".NET Developer",
+        "Mobile Developer",
+        "API Developer",
+    ],
+    "Data and AI": [
+        "Data Engineer",
+        "Azure Data Engineer",
+        "AWS Data Engineer",
+        "Data Scientist",
+        "Machine Learning Engineer",
+        "Business Intelligence Analyst",
+        "Data Analyst",
+        "Analytics Engineer",
+        "Database Developer",
+    ],
+    "Cloud and DevOps": [
+        "DevOps Engineer",
+        "Cloud Engineer",
+        "Azure Cloud Engineer",
+        "AWS Cloud Engineer",
+        "Site Reliability Engineer",
+        "Platform Engineer",
+        "Infrastructure Engineer",
+        "Kubernetes Engineer",
+    ],
+    "Security": [
+        "Cybersecurity Analyst",
+        "Security Engineer",
+        "SOC Analyst",
+        "IAM Analyst",
+        "Vulnerability Analyst",
+        "GRC Analyst",
+        "Cloud Security Engineer",
+    ],
+    "Quality and Testing": [
+        "QA Engineer",
+        "Test Automation Engineer",
+        "SDET",
+        "Manual QA Tester",
+        "Performance Test Engineer",
+    ],
+    "IT Operations": [
+        "Systems Administrator",
+        "Network Engineer",
+        "IT Support Specialist",
+        "Help Desk Analyst",
+        "Desktop Support Technician",
+        "Technical Support Engineer",
+        "IT Analyst",
+    ],
+}
+
+
+ALL_IT_ROLES = sorted({role for roles in ROLE_CATALOG.values() for role in roles})
 
 
 SKILL_TERMS = {

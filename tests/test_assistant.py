@@ -2,8 +2,10 @@ from pathlib import Path
 import tempfile
 import unittest
 
+from job_assistant.answers import AnswerBank
 from job_assistant.ats import score_job
 from job_assistant.models import CandidateProfile, JobPosting, RoleLibrary
+from job_assistant.search import build_search_plan
 from job_assistant.storage import ApplicationStore, application_key
 
 
@@ -27,6 +29,7 @@ class AssistantTests(unittest.TestCase):
         self.assertIn("sql", analysis.matched_skills)
         self.assertIn("airflow", analysis.missing_skills)
         self.assertTrue(any("ETL" in bullet or "data" in bullet for bullet in analysis.selected_bullets))
+        self.assertLessEqual(analysis.original_ats_score, analysis.optimized_ats_score)
 
     def test_duplicate_key_blocks_same_company_and_role(self) -> None:
         first = JobPosting.from_dict(
@@ -58,6 +61,30 @@ class AssistantTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             store = ApplicationStore(Path(tmpdir) / "applications.jsonl")
             self.assertEqual(store.summary(), {})
+
+    def test_answer_bank_matches_question_options(self) -> None:
+        bank = AnswerBank(Path("data/application_answers.example.json"))
+
+        match = bank.match(
+            "Do you require visa sponsorship now or in the future?",
+            ["Yes", "No"],
+        )
+
+        self.assertIsNotNone(match)
+        assert match is not None
+        self.assertEqual(match.answer, "No")
+
+    def test_search_plan_is_portal_ordered(self) -> None:
+        plan = build_search_plan(
+            roles=["Data Engineer", "Backend Developer"],
+            platforms=["linkedin", "indeed"],
+            location="Remote",
+        )
+
+        self.assertEqual(plan[0]["platform"], "linkedin")
+        self.assertEqual(plan[1]["platform"], "linkedin")
+        self.assertEqual(plan[2]["platform"], "indeed")
+        self.assertEqual(plan[0]["minimum_manual_review_seconds"], 180)
 
 
 if __name__ == "__main__":

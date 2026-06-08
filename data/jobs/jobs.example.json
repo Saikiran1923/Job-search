@@ -7,7 +7,17 @@
       "url": "https://example.com/careers/data-engineer",
       "source": "company_portals",
       "location": "Remote",
-      "description": "We are looking for a Data Engineer with SQL, Python, ETL, Airflow, Spark, data warehouse, AWS, and agile experience. The role builds reliable pipelines, documents data models, improves data quality, and partners with analysts and product stakeholders."
+      "description": "We are looking for a Data Engineer with SQL, Python, ETL, Airflow, Spark, data warehouse, AWS, and agile experience. The role builds reliable pipelines, documents data models, improves data quality, and partners with analysts and product stakeholders.",
+      "application_questions": [
+        {
+          "question": "Are you legally authorized to work in the United States?",
+          "options": ["Yes", "No"]
+        },
+        {
+          "question": "Will you now or in the future require sponsorship for employment visa status?",
+          "options": ["Yes", "No"]
+        }
+      ]
     },
     {
       "role": "Backend Developer",
@@ -16,7 +26,13 @@
       "url": "https://example.com/careers/backend-developer",
       "source": "linkedin",
       "location": "Remote",
-      "description": "Backend Developer needed for REST API and microservices development using Python or Java, SQL, Docker, CI/CD, Git, and cloud services. Experience with testing, observability, agile delivery, and secure API design is preferred."
+      "description": "Backend Developer needed for REST API and microservices development using Python or Java, SQL, Docker, CI/CD, Git, and cloud services. Experience with testing, observability, agile delivery, and secure API design is preferred.",
+      "application_questions": [
+        {
+          "question": "Are you willing to work remotely or hybrid as required by the role?",
+          "options": ["Yes", "No"]
+        }
+      ]
     }
   ]
 }

@@ -61,7 +61,8 @@ def render_resume(profile: CandidateProfile, analysis: JobAnalysis) -> str:
         [
             "",
             "## ATS Alignment Notes",
-            f"- ATS match score: {analysis.ats_score}%",
+            f"- Original resume ATS match score: {analysis.original_ats_score}%",
+            f"- Optimized resume ATS match score: {analysis.optimized_ats_score}%",
             f"- Matched skills: {', '.join(analysis.matched_skills) or 'None detected'}",
             f"- Missing or review-required skills: {', '.join(analysis.missing_skills) or 'None detected'}",
         ]

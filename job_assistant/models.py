@@ -126,6 +126,22 @@ class CandidateProfile:
 
 
 @dataclass(frozen=True)
+class ApplicationQuestion:
+    question: str
+    options: list[str] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "ApplicationQuestion":
+        question = str(value.get("question", "")).strip()
+        if not question:
+            raise ConfigError("Application question requires a non-empty question")
+        return cls(
+            question=question,
+            options=_string_list(value.get("options", []), "application question options"),
+        )
+
+
+@dataclass(frozen=True)
 class JobPosting:
     role: str
     company: str
@@ -134,6 +150,7 @@ class JobPosting:
     source: str = ""
     location: str = ""
     description: str = ""
+    application_questions: list[ApplicationQuestion] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> "JobPosting":
@@ -158,6 +175,10 @@ class JobPosting:
             source=str(value.get("source", "")).strip(),
             location=str(value.get("location", "")).strip(),
             description=description,
+            application_questions=[
+                ApplicationQuestion.from_dict(item)
+                for item in value.get("application_questions", [])
+            ],
         )
 
 
@@ -205,10 +226,13 @@ class RoleLibrary:
 class JobAnalysis:
     job: JobPosting
     ats_score: int
+    original_ats_score: int
+    optimized_ats_score: int
     matched_skills: list[str]
     missing_skills: list[str]
     important_keywords: list[str]
     selected_bullets: list[str]
+    suggested_answers: dict[str, str]
     decision: str
     decision_reason: str
 
