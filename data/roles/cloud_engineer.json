@@ -1,0 +1,21 @@
+{
+  "role": "Cloud Engineer",
+  "bullets": [
+    {
+      "text": "Supported cloud workloads by improving deployment repeatability, access patterns, monitoring, and operational documentation.",
+      "keywords": ["aws", "azure", "gcp", "monitoring", "documentation"]
+    },
+    {
+      "text": "Used infrastructure-as-code and Git-based review workflows to make environment changes traceable and easier to validate.",
+      "keywords": ["terraform", "git", "ci/cd", "infrastructure"]
+    },
+    {
+      "text": "Containerized services and collaborated on deployment practices that improved portability across development and production environments.",
+      "keywords": ["docker", "kubernetes", "devops", "deployment"]
+    },
+    {
+      "text": "Troubleshot cloud service issues across compute, storage, networking, and identity boundaries to restore reliable operations.",
+      "keywords": ["troubleshooting", "iam", "networking", "storage"]
+    }
+  ]
+}

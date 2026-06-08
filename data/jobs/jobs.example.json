@@ -1,0 +1,22 @@
+{
+  "jobs": [
+    {
+      "role": "Data Engineer",
+      "title": "Data Engineer",
+      "company": "Example Analytics",
+      "url": "https://example.com/careers/data-engineer",
+      "source": "company_portals",
+      "location": "Remote",
+      "description": "We are looking for a Data Engineer with SQL, Python, ETL, Airflow, Spark, data warehouse, AWS, and agile experience. The role builds reliable pipelines, documents data models, improves data quality, and partners with analysts and product stakeholders."
+    },
+    {
+      "role": "Backend Developer",
+      "title": "Backend Developer",
+      "company": "Example Software",
+      "url": "https://example.com/careers/backend-developer",
+      "source": "linkedin",
+      "location": "Remote",
+      "description": "Backend Developer needed for REST API and microservices development using Python or Java, SQL, Docker, CI/CD, Git, and cloud services. Experience with testing, observability, agile delivery, and secure API design is preferred."
+    }
+  ]
+}

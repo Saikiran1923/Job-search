@@ -1,0 +1,21 @@
+{
+  "role": "Software Engineer",
+  "bullets": [
+    {
+      "text": "Built maintainable application features using clean interfaces, source control, automated testing, and peer review practices.",
+      "keywords": ["software", "git", "testing", "code review"]
+    },
+    {
+      "text": "Integrated APIs and data stores to support reliable user workflows while balancing performance, security, and maintainability.",
+      "keywords": ["api", "rest", "sql", "security", "performance"]
+    },
+    {
+      "text": "Participated in agile planning, estimation, debugging, and release validation to deliver incremental product improvements.",
+      "keywords": ["agile", "scrum", "debugging", "release"]
+    },
+    {
+      "text": "Documented implementation decisions and operational runbooks so teams could support and extend delivered functionality.",
+      "keywords": ["documentation", "operations", "runbooks"]
+    }
+  ]
+}

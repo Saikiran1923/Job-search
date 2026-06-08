@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "job-application-assistant"
+version = "0.1.0"
+description = "Compliant CLI assistant for job analysis, ATS optimization, tailored documents, and application tracking."
+requires-python = ">=3.10"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Saikiran Reddy Garlapati" }]
+
+[project.scripts]
+job-assistant = "job_assistant.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["job_assistant*"]

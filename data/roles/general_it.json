@@ -1,0 +1,21 @@
+{
+  "role": "General IT",
+  "bullets": [
+    {
+      "text": "Translated business requirements into maintainable technical solutions while coordinating priorities across product, operations, and engineering stakeholders.",
+      "keywords": ["requirements", "agile", "scrum", "jira", "stakeholders"]
+    },
+    {
+      "text": "Improved system reliability by troubleshooting incidents, documenting root causes, and implementing repeatable fixes for recurring technical issues.",
+      "keywords": ["troubleshooting", "documentation", "reliability", "operations"]
+    },
+    {
+      "text": "Used SQL, Python, Git, and structured testing practices to validate changes, improve data quality, and support reliable releases.",
+      "keywords": ["sql", "python", "git", "testing", "data quality"]
+    },
+    {
+      "text": "Collaborated in agile delivery cycles to estimate work, communicate risks, review acceptance criteria, and ship incremental improvements.",
+      "keywords": ["agile", "scrum", "delivery", "acceptance criteria"]
+    }
+  ]
+}

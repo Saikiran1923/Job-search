@@ -1,0 +1,21 @@
+{
+  "role": "Data Scientist",
+  "bullets": [
+    {
+      "text": "Analyzed structured datasets with Python, SQL, Pandas, and visualization techniques to identify trends and decision-ready insights.",
+      "keywords": ["python", "sql", "pandas", "visualization", "analytics"]
+    },
+    {
+      "text": "Built reproducible modeling workflows with documented assumptions, validation metrics, and clear communication of business impact.",
+      "keywords": ["machine learning", "scikit-learn", "modeling", "validation"]
+    },
+    {
+      "text": "Partnered with stakeholders to define analytical questions, prepare features, evaluate results, and translate findings into recommendations.",
+      "keywords": ["stakeholders", "features", "analytics", "recommendations"]
+    },
+    {
+      "text": "Created dashboards and exploratory reports that made model results and operational metrics easier for teams to act on.",
+      "keywords": ["tableau", "power bi", "dashboards", "metrics"]
+    }
+  ]
+}

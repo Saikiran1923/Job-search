@@ -1,0 +1,21 @@
+{
+  "role": "DevOps Engineer",
+  "bullets": [
+    {
+      "text": "Improved CI/CD workflows with automated validation, deployment checks, and clear release documentation for engineering teams.",
+      "keywords": ["ci/cd", "jenkins", "github actions", "gitlab ci", "release"]
+    },
+    {
+      "text": "Containerized and deployed application services while coordinating environment configuration, secrets handling, and rollback readiness.",
+      "keywords": ["docker", "kubernetes", "deployment", "devops"]
+    },
+    {
+      "text": "Used monitoring and observability practices to detect failures, investigate incidents, and reduce recurring operational toil.",
+      "keywords": ["observability", "prometheus", "grafana", "monitoring", "incidents"]
+    },
+    {
+      "text": "Maintained infrastructure changes through Git review, scripted automation, and repeatable provisioning patterns.",
+      "keywords": ["terraform", "git", "bash", "automation"]
+    }
+  ]
+}
