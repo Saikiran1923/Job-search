@@ -1,26 +1,22 @@
 const statuses = ["saved", "applied", "interviewing", "offer", "rejected"];
-const statusLabels = {
-  saved: "Saved",
-  applied: "Applied",
-  interviewing: "Interviewing",
-  offer: "Offer",
-  rejected: "Rejected",
-};
+const statusLabels = { saved: "Saved", applied: "Applied", interviewing: "Interviewing", offer: "Offer", rejected: "Rejected" };
 
 let token = localStorage.getItem("jobAssistantToken") || "";
-let currentUser = null;
-let applications = [];
+let lastJobDetails = null;
+let lastResumeText = "";
+let lastPrediction = null;
+let acceptedSuggestions = [];
+let lastInterviewQuestions = [];
 
 const authView = document.getElementById("authView");
-const dashboardView = document.getElementById("dashboardView");
+const appView = document.getElementById("appView");
 const userLabel = document.getElementById("userLabel");
-const logoutBtn = document.getElementById("logoutBtn");
 
 function toast(message) {
   const element = document.getElementById("toast");
   element.textContent = message;
   element.classList.add("show");
-  setTimeout(() => element.classList.remove("show"), 2600);
+  setTimeout(() => element.classList.remove("show"), 2800);
 }
 
 async function api(path, options = {}) {
@@ -29,9 +25,7 @@ async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers });
   if (response.status === 204) return null;
   const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.error || "API request failed");
-  }
+  if (!response.ok) throw new Error(data.error || "Request failed");
   return data;
 }
 
@@ -45,22 +39,17 @@ function formData(form) {
 
 function setSession(nextToken, user) {
   token = nextToken;
-  currentUser = user;
   localStorage.setItem("jobAssistantToken", token);
   userLabel.textContent = `${user.name} (${user.email})`;
-  logoutBtn.classList.remove("hidden");
   authView.classList.add("hidden");
-  dashboardView.classList.remove("hidden");
+  appView.classList.remove("hidden");
 }
 
 function clearSession() {
   token = "";
-  currentUser = null;
   localStorage.removeItem("jobAssistantToken");
-  userLabel.textContent = "Not signed in";
-  logoutBtn.classList.add("hidden");
   authView.classList.remove("hidden");
-  dashboardView.classList.add("hidden");
+  appView.classList.add("hidden");
 }
 
 async function bootstrap() {
@@ -68,162 +57,260 @@ async function bootstrap() {
   try {
     const data = await api("/api/me");
     setSession(token, data.user);
-    await refreshDashboard();
+    await refreshAll();
   } catch {
     clearSession();
   }
 }
 
-async function refreshDashboard() {
-  const [applicationData, analyticsData, recruiterData, reminderData] = await Promise.all([
-    api("/api/applications"),
-    api("/api/analytics"),
-    api("/api/recruiters"),
-    api("/api/reminders"),
-  ]);
-  applications = applicationData.applications;
-  renderStats(analyticsData.analytics);
-  renderAnalytics(analyticsData.analytics);
-  renderKanban(applications);
-  renderRecruiters(recruiterData.recruiters);
-  renderReminders(reminderData.reminders);
+async function refreshAll() {
+  await Promise.all([refreshAnalytics(), refreshApplications(), refreshQuestions(), refreshContacts()]);
 }
 
-function renderStats(analytics) {
-  const stats = [
-    ["Total", analytics.total_applications],
-    ["Avg ATS", `${analytics.average_ats_score}%`],
-    ["Response", `${analytics.response_rate}%`],
-    ["Interview", `${analytics.interview_conversion_rate}%`],
-    ["Offer", `${analytics.offer_conversion_rate}%`],
+function switchPage(page) {
+  document.querySelectorAll("#nav button").forEach((button) => button.classList.toggle("active", button.dataset.page === page));
+  document.querySelectorAll(".page").forEach((view) => view.classList.toggle("active", view.dataset.view === page));
+  const title = page.split("-").map((word) => word[0].toUpperCase() + word.slice(1)).join(" ");
+  document.getElementById("pageEyebrow").textContent = title;
+  document.getElementById("pageTitle").textContent = page === "dashboard" ? "Application Command Center" : title;
+}
+
+async function refreshAnalytics() {
+  const { analytics } = await api("/api/analytics");
+  const cards = [
+    ["Applications Tracked", analytics.applications_tracked],
+    ["ATS Before Average", `${analytics.ats_before_average}%`],
+    ["ATS After Average", `${analytics.ats_after_average}%`],
+    ["Avg ATS Improvement", `${analytics.average_ats_improvement}%`],
+    ["Resume Versions", analytics.resume_version_count],
+    ["Answered Questions", analytics.answered_questions],
+    ["Unanswered Questions", analytics.unanswered_questions],
+    ["Interview Questions", analytics.interview_questions_generated],
+    ["Practiced Questions", analytics.practiced_questions],
   ];
-  document.getElementById("stats").innerHTML = stats
-    .map(([label, value]) => `<div class="stat"><span>${label}</span><strong>${value}</strong></div>`)
-    .join("");
-}
-
-function renderAnalytics(analytics) {
-  const statusRows = Object.entries(analytics.by_status)
-    .map(([status, count]) => `<div class="list-item">${statusLabels[status] || status}: ${count}</div>`)
-    .join("");
-  const versions = Object.entries(analytics.resume_versions)
-    .map(([version, data]) => `<div class="list-item">${version}: ${data.count} apps, ${data.interviews} interviews, ${data.offers} offers</div>`)
-    .join("");
-  document.getElementById("analytics").innerHTML = `
-    <h3>Status Breakdown</h3>
-    ${statusRows || "<p>No applications yet.</p>"}
-    <h3>Resume Versions</h3>
-    ${versions || "<p>No resume version data yet.</p>"}
+  document.getElementById("stats").innerHTML = cards.map(([label, value]) => `<div class="stat"><span>${label}</span><strong>${value}</strong></div>`).join("");
+  document.getElementById("analyticsSummary").innerHTML = `
+    <div class="metric-row"><span>Response rate</span><strong>${analytics.response_rate}%</strong></div>
+    <div class="metric-row"><span>Interview conversion</span><strong>${analytics.interview_conversion_rate}%</strong></div>
+    <div class="metric-row"><span>Offer conversion</span><strong>${analytics.offer_conversion_rate}%</strong></div>
   `;
+  document.getElementById("analyticsCharts").innerHTML = renderBars(analytics.by_status);
 }
 
-function renderKanban(items) {
-  const kanban = document.getElementById("kanban");
-  kanban.innerHTML = statuses
-    .map((status) => {
-      const cards = items.filter((item) => item.status === status);
-      return `
-        <div class="column">
-          <h3>${statusLabels[status]} <span>${cards.length}</span></h3>
-          ${cards.map(renderApplicationCard).join("")}
-        </div>
-      `;
-    })
-    .join("");
+function renderBars(values) {
+  const max = Math.max(1, ...Object.values(values));
+  return Object.entries(values).map(([label, value]) => `
+    <div class="bar-row">
+      <span>${statusLabels[label] || label}</span>
+      <div class="bar"><i style="width:${(value / max) * 100}%"></i></div>
+      <strong>${value}</strong>
+    </div>
+  `).join("");
+}
+
+async function refreshApplications() {
+  const { applications } = await api("/api/applications");
+  renderKanban(applications);
+  renderApplicationTable(applications);
+}
+
+function renderKanban(applications) {
+  document.getElementById("kanban").innerHTML = statuses.map((status) => {
+    const cards = applications.filter((app) => app.status === status);
+    return `<div class="column"><h3>${statusLabels[status]} <span>${cards.length}</span></h3>${cards.map(renderApplicationCard).join("")}</div>`;
+  }).join("");
   document.querySelectorAll("[data-status-select]").forEach((select) => {
     select.addEventListener("change", async (event) => {
-      const id = event.target.dataset.statusSelect;
-      await api(`/api/applications/${id}`, {
+      await api(`/api/applications/${event.target.dataset.statusSelect}`, {
         method: "PATCH",
         body: JSON.stringify({ status: event.target.value, status_note: "Updated from dashboard" }),
       });
       toast("Status updated");
-      await refreshDashboard();
+      await refreshAll();
     });
   });
 }
 
 function renderApplicationCard(item) {
-  const scoreClass = item.optimized_ats_score >= 85 ? "good" : item.optimized_ats_score >= 70 ? "warn" : "bad";
-  return `
-    <article class="application">
-      <strong>${escapeHtml(item.company)}</strong>
-      <p>${escapeHtml(item.title || item.role)} | ${escapeHtml(item.location || "Location not set")}</p>
-      <p><span class="pill ${scoreClass}">ATS ${item.optimized_ats_score || item.ats_score || 0}%</span></p>
-      <p><a href="${escapeAttribute(item.url)}" target="_blank" rel="noreferrer">Open job</a></p>
-      ${item.follow_up_at ? `<p>Follow up: ${escapeHtml(item.follow_up_at)}</p>` : ""}
-      ${item.recruiter_name ? `<p>Recruiter: ${escapeHtml(item.recruiter_name)}</p>` : ""}
-      <div class="status-row">
-        <select data-status-select="${item.id}">
-          ${statuses.map((status) => `<option value="${status}" ${status === item.status ? "selected" : ""}>${statusLabels[status]}</option>`).join("")}
-        </select>
-      </div>
-    </article>
+  return `<article class="application">
+    <strong>${escapeHtml(item.company)}</strong>
+    <p>${escapeHtml(item.title || item.role)}</p>
+    <p><span class="pill">Before ${item.original_ats_score || 0}%</span> <span class="pill good">After ${item.optimized_ats_score || 0}%</span></p>
+    <a href="${escapeAttribute(item.url)}" target="_blank" rel="noreferrer">Open job</a>
+    <select data-status-select="${item.id}">${statuses.map((status) => `<option value="${status}" ${status === item.status ? "selected" : ""}>${statusLabels[status]}</option>`).join("")}</select>
+  </article>`;
+}
+
+function renderApplicationTable(applications) {
+  document.getElementById("applicationTable").innerHTML = `<table>
+    <thead><tr><th>Company</th><th>Role</th><th>Status</th><th>ATS Before</th><th>ATS After</th><th>Resume</th></tr></thead>
+    <tbody>${applications.map((app) => `<tr><td>${escapeHtml(app.company)}</td><td>${escapeHtml(app.role)}</td><td>${escapeHtml(app.status)}</td><td>${app.original_ats_score || 0}%</td><td>${app.optimized_ats_score || 0}%</td><td>${escapeHtml(app.resume_version || "")}</td></tr>`).join("")}</tbody>
+  </table>`;
+}
+
+async function refreshQuestions() {
+  const [answered, unanswered] = await Promise.all([api("/api/questions?status=answered"), api("/api/questions?status=unanswered")]);
+  document.getElementById("answeredQuestions").innerHTML = renderQuestions(answered.questions, false);
+  document.getElementById("unansweredQuestions").innerHTML = renderQuestions(unanswered.questions, true);
+}
+
+function renderQuestions(questions, allowAnswer) {
+  if (!questions.length) return "<p class='muted'>No questions.</p>";
+  return questions.map((question) => `
+    <div class="question-card">
+      <strong>${escapeHtml(question.question)}</strong>
+      <p>${escapeHtml(question.company_name || "")} ${escapeHtml(question.job_title || "")}</p>
+      ${question.options.length ? `<p>Options: ${question.options.map(escapeHtml).join(", ")}</p>` : ""}
+      ${question.answer ? `<p><b>Answer:</b> ${escapeHtml(question.answer)}</p>` : ""}
+      ${allowAnswer ? `<form data-answer-form="${question.id}" class="inline-form"><input name="answer" required placeholder="Type answer" /><button>Save Answer</button></form>` : ""}
+    </div>
+  `).join("");
+}
+
+async function refreshContacts() {
+  const [recruiters, reminders] = await Promise.all([api("/api/recruiters"), api("/api/reminders")]);
+  document.getElementById("recruiters").innerHTML = recruiters.recruiters.map((item) => `<div class="list-item"><strong>${escapeHtml(item.name)}</strong><br>${escapeHtml(item.company || "")} ${escapeHtml(item.email || "")}</div>`).join("") || "<p>No recruiters saved.</p>";
+  document.getElementById("reminders").innerHTML = reminders.reminders.map((item) => `<div class="list-item"><strong>${escapeHtml(item.title)}</strong><br>${escapeHtml(item.due_at)}</div>`).join("") || "<p>No reminders saved.</p>";
+}
+
+function renderPrediction(prediction, suggestions) {
+  document.getElementById("atsPredictionOutput").innerHTML = `
+    <div class="card score-card"><p class="eyebrow">${prediction.label}</p><strong>${prediction.score}%</strong><p>Confidence: ${prediction.confidence_level}</p></div>
+    <div class="card"><h3>Matched Keywords</h3><p>${prediction.matched_keywords.map(escapeHtml).join(", ") || "None"}</p><h3>Missing Keywords</h3><p>${prediction.missing_keywords.map(escapeHtml).join(", ") || "None"}</p><h3>Weak Sections</h3><p>${prediction.weak_resume_sections.map(escapeHtml).join(", ") || "None"}</p><h3>Formatting Issues</h3><p>${prediction.formatting_issues.map(escapeHtml).join("<br>") || "None"}</p></div>
   `;
+  renderSuggestions(suggestions);
 }
 
-function renderRecruiters(items) {
-  document.getElementById("recruiters").innerHTML = items
-    .map((item) => `<div class="list-item"><strong>${escapeHtml(item.name)}</strong> ${escapeHtml(item.company || "")}<br>${escapeHtml(item.email || "")}</div>`)
-    .join("") || "<p>No recruiters saved.</p>";
+function renderSuggestions(suggestions) {
+  acceptedSuggestions = [];
+  document.getElementById("suggestionsOutput").innerHTML = suggestions.map((suggestion) => `
+    <div class="suggestion-card" data-suggestion="${escapeAttribute(suggestion.id)}">
+      <h3>${escapeHtml(suggestion.section_name)}</h3>
+      <p><b>Reason:</b> ${escapeHtml(suggestion.reason_for_change)}</p>
+      <label>Current Text<textarea rows="4" readonly>${escapeHtml(suggestion.current_text)}</textarea></label>
+      <label>Suggested Text<textarea rows="5" data-suggested-text>${escapeHtml(suggestion.suggested_text)}</textarea></label>
+      <div class="toolbar">
+        <button data-accept="${escapeAttribute(suggestion.id)}" type="button">Accept</button>
+        <button data-reject="${escapeAttribute(suggestion.id)}" class="secondary" type="button">Reject</button>
+      </div>
+    </div>
+  `).join("") || "<p class='muted'>No suggestions yet.</p>";
+  document.querySelectorAll("[data-accept]").forEach((button) => button.addEventListener("click", () => {
+    const card = button.closest(".suggestion-card");
+    const suggestion = suggestions.find((item) => item.id === button.dataset.accept);
+    suggestion.suggested_text = card.querySelector("[data-suggested-text]").value;
+    acceptedSuggestions = acceptedSuggestions.filter((item) => item.id !== suggestion.id).concat([suggestion]);
+    card.classList.add("accepted");
+    toast("Suggestion accepted");
+  }));
+  document.querySelectorAll("[data-reject]").forEach((button) => button.addEventListener("click", () => {
+    acceptedSuggestions = acceptedSuggestions.filter((item) => item.id !== button.dataset.reject);
+    button.closest(".suggestion-card").classList.add("rejected");
+    toast("Suggestion rejected");
+  }));
 }
 
-function renderReminders(items) {
-  document.getElementById("reminders").innerHTML = items
-    .map((item) => `<div class="list-item"><strong>${escapeHtml(item.title)}</strong><br>${escapeHtml(item.due_at)} ${item.company ? `| ${escapeHtml(item.company)}` : ""}</div>`)
-    .join("") || "<p>No reminders saved.</p>";
+function renderInterviewPrep(groups) {
+  lastInterviewQuestions = [...groups.level_1, ...groups.level_2];
+  document.getElementById("interviewPrepOutput").innerHTML = ["level_1", "level_2"].map((level) => `
+    <h3>${level === "level_1" ? "Level 1: Basic / Screening Questions" : "Level 2: Technical / Role-Based Questions"}</h3>
+    ${groups[level].map((item) => `<div class="question-card"><strong>${escapeHtml(item.question)}</strong><p><span class="pill">${escapeHtml(item.difficulty_level)}</span> <span class="pill">${escapeHtml(item.source)}</span> <span class="pill">Confidence ${item.confidence_score}%</span></p><p><b>Suggested answer:</b> ${escapeHtml(item.suggested_answer)}</p><p><b>Keywords:</b> ${(item.keywords_to_include || []).map(escapeHtml).join(", ")}</p></div>`).join("")}
+  `).join("");
 }
 
 function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+  return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
 
 function escapeAttribute(value) {
   return escapeHtml(value).replaceAll("`", "&#096;");
 }
 
+document.querySelectorAll("#nav button").forEach((button) => button.addEventListener("click", () => switchPage(button.dataset.page)));
+
+document.getElementById("themeBtn").addEventListener("click", () => document.body.classList.toggle("light"));
+
 document.getElementById("loginForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
-    const data = await api("/api/auth/login", {
-      method: "POST",
-      body: JSON.stringify(formData(event.target)),
-    });
+    const data = await api("/api/auth/login", { method: "POST", body: JSON.stringify(formData(event.target)) });
     setSession(data.token, data.user);
-    await refreshDashboard();
-    toast("Logged in");
-  } catch (error) {
-    toast(error.message);
-  }
+    await refreshAll();
+  } catch (error) { toast(error.message); }
 });
 
 document.getElementById("registerForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
-    const data = await api("/api/auth/register", {
-      method: "POST",
-      body: JSON.stringify(formData(event.target)),
-    });
+    const data = await api("/api/auth/register", { method: "POST", body: JSON.stringify(formData(event.target)) });
     setSession(data.token, data.user);
-    await refreshDashboard();
-    toast("Account created");
-  } catch (error) {
-    toast(error.message);
-  }
+    await refreshAll();
+  } catch (error) { toast(error.message); }
 });
 
-logoutBtn.addEventListener("click", async () => {
-  try {
-    await api("/api/auth/logout", { method: "POST" });
-  } catch {
-    // Session cleanup should still happen locally.
-  }
+document.getElementById("logoutBtn").addEventListener("click", async () => {
+  try { await api("/api/auth/logout", { method: "POST" }); } catch {}
   clearSession();
+});
+
+document.getElementById("jobExtractForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    const { job_details } = await api("/api/job-intake/extract", { method: "POST", body: JSON.stringify(formData(event.target)) });
+    lastJobDetails = job_details;
+    document.getElementById("jobExtractOutput").textContent = JSON.stringify(job_details, null, 2);
+    if (job_details.full_job_description) document.getElementById("manualJobDescription").value = job_details.full_job_description;
+    await refreshQuestions();
+  } catch (error) { toast(error.message); }
+});
+
+document.getElementById("atsPredictForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const data = formData(event.target);
+  lastResumeText = data.resume_text;
+  const jobDetails = lastJobDetails || { full_job_description: data.job_description, job_title: "" };
+  try {
+    const result = await api("/api/ats/predict", { method: "POST", body: JSON.stringify({ resume_text: data.resume_text, job_details: jobDetails }) });
+    lastPrediction = result.prediction;
+    renderPrediction(result.prediction, result.suggestions);
+    switchPage("resume-optimizer");
+  } catch (error) { toast(error.message); }
+});
+
+document.getElementById("optimizeResumeBtn").addEventListener("click", async () => {
+  if (!lastResumeText) return toast("Run ATS Analysis first");
+  try {
+    const result = await api("/api/resume/optimize", { method: "POST", body: JSON.stringify({ resume_text: lastResumeText, job_details: lastJobDetails || {}, approved_suggestions: acceptedSuggestions }) });
+    document.getElementById("optimizedResumeOutput").textContent = JSON.stringify({ before: result.before.score, after: result.after.score, improvement: result.improvement_percentage, optimized_resume: result.optimized_resume }, null, 2);
+    await refreshAnalytics();
+  } catch (error) { toast(error.message); }
+});
+
+document.getElementById("buildAutofillBtn").addEventListener("click", async () => {
+  const questions = (lastJobDetails && lastJobDetails.visible_application_questions) || [];
+  try {
+    const result = await api("/api/autofill/draft", { method: "POST", body: JSON.stringify({ questions, company_name: lastJobDetails?.company_name || "", job_title: lastJobDetails?.job_title || "", job_url: lastJobDetails?.job_url || "" }) });
+    document.getElementById("autofillOutput").textContent = JSON.stringify(result.autofill, null, 2);
+    await refreshQuestions();
+  } catch (error) { toast(error.message); }
+});
+
+document.getElementById("interviewPrepForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    const result = await api("/api/interview/prep", { method: "POST", body: JSON.stringify({ ...formData(event.target), save: true }) });
+    renderInterviewPrep(result.questions);
+    await refreshAnalytics();
+  } catch (error) { toast(error.message); }
+});
+
+document.getElementById("exportInterviewBtn").addEventListener("click", () => {
+  const text = lastInterviewQuestions.map((item) => `${item.difficulty_level} | ${item.source}\nQ: ${item.question}\nSuggested: ${item.suggested_answer}\nKeywords: ${(item.keywords_to_include || []).join(", ")}\n`).join("\n");
+  const blob = new Blob([text], { type: "text/plain" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "interview-questions.txt";
+  link.click();
 });
 
 document.getElementById("applicationForm").addEventListener("submit", async (event) => {
@@ -235,80 +322,31 @@ document.getElementById("applicationForm").addEventListener("submit", async (eve
   try {
     await api("/api/applications", { method: "POST", body: JSON.stringify(data) });
     event.target.reset();
+    await refreshAll();
     toast("Application saved");
-    await refreshDashboard();
-  } catch (error) {
-    toast(error.message);
-  }
+  } catch (error) { toast(error.message); }
 });
 
 document.getElementById("recruiterForm").addEventListener("submit", async (event) => {
   event.preventDefault();
-  try {
-    await api("/api/recruiters", { method: "POST", body: JSON.stringify(formData(event.target)) });
-    event.target.reset();
-    toast("Recruiter saved");
-    await refreshDashboard();
-  } catch (error) {
-    toast(error.message);
-  }
+  try { await api("/api/recruiters", { method: "POST", body: JSON.stringify(formData(event.target)) }); event.target.reset(); await refreshContacts(); toast("Recruiter saved"); } catch (error) { toast(error.message); }
 });
 
 document.getElementById("reminderForm").addEventListener("submit", async (event) => {
   event.preventDefault();
-  try {
-    await api("/api/reminders", { method: "POST", body: JSON.stringify(formData(event.target)) });
-    event.target.reset();
-    toast("Reminder saved");
-    await refreshDashboard();
-  } catch (error) {
-    toast(error.message);
-  }
+  try { await api("/api/reminders", { method: "POST", body: JSON.stringify(formData(event.target)) }); event.target.reset(); await refreshContacts(); toast("Reminder saved"); } catch (error) { toast(error.message); }
 });
 
-document.getElementById("atsForm").addEventListener("submit", async (event) => {
+document.addEventListener("submit", async (event) => {
+  const form = event.target.closest("[data-answer-form]");
+  if (!form) return;
   event.preventDefault();
   try {
-    const result = await api("/api/ats/analyze", {
-      method: "POST",
-      body: JSON.stringify(formData(event.target)),
-    });
-    document.getElementById("atsOutput").textContent = JSON.stringify(result.analysis, null, 2);
-  } catch (error) {
-    toast(error.message);
-  }
-});
-
-document.getElementById("interviewForm").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  try {
-    const result = await api("/api/interview/questions", {
-      method: "POST",
-      body: JSON.stringify(formData(event.target)),
-    });
-    const sections = Object.entries(result.questions)
-      .map(([label, questions]) => `
-        <h3>${escapeHtml(label.replaceAll("_", " "))}</h3>
-        <ol>${questions.map((question) => `<li>${escapeHtml(question)}</li>`).join("")}</ol>
-      `)
-      .join("");
-    document.getElementById("interviewOutput").innerHTML = sections;
-  } catch (error) {
-    toast(error.message);
-  }
-});
-
-document.getElementById("evaluateForm").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  try {
-    const result = await api("/api/interview/evaluate", {
-      method: "POST",
-      body: JSON.stringify(formData(event.target)),
-    });
-    document.getElementById("evaluationOutput").textContent = JSON.stringify(result.evaluation, null, 2);
-  } catch (error) {
-    toast(error.message);
-  }
+    await api(`/api/questions/${form.dataset.answerForm}/answer`, { method: "POST", body: JSON.stringify(formData(form)) });
+    await refreshQuestions();
+    await refreshAnalytics();
+    toast("Answer saved");
+  } catch (error) { toast(error.message); }
 });
 
 bootstrap();

@@ -119,6 +119,98 @@ POST /api/ats/analyze
 
 Returns original ATS score, optimized score, matched skills, missing skills, suggested role-library bullets, and a tailored summary.
 
+## Final Workflow APIs
+
+### Job URL Intake
+
+```http
+POST /api/job-intake/extract
+```
+
+```json
+{
+  "job_url": "https://company.example/careers/job-id"
+}
+```
+
+If the URL cannot be read because of login, CAPTCHA, JavaScript rendering, or website restrictions, the API returns:
+
+```text
+Unable to extract full job details from URL. Please paste the job description manually.
+```
+
+### ATS Prediction Score
+
+```http
+POST /api/ats/predict
+```
+
+```json
+{
+  "resume_text": "Current resume text",
+  "job_details": {
+    "job_title": "Data Engineer",
+    "full_job_description": "Full JD text"
+  }
+}
+```
+
+Returns weighted `ATS Prediction Score`, matched keywords, missing keywords, weak resume sections, formatting issues, confidence level, and reviewable resume suggestions.
+
+### Resume Optimization + Version Creation
+
+```http
+POST /api/resume/optimize
+GET /api/resume/versions
+```
+
+```json
+{
+  "resume_text": "Current resume text",
+  "job_details": {
+    "job_title": "Data Engineer",
+    "company_name": "Example Analytics",
+    "job_url": "https://example.test/job",
+    "full_job_description": "Full JD text"
+  },
+  "approved_suggestions": [
+    {
+      "section_name": "Skills",
+      "suggested_text": "Python, SQL, Airflow",
+      "keywords_added": ["airflow"]
+    }
+  ]
+}
+```
+
+### Question Bank
+
+```http
+GET /api/questions
+GET /api/questions?status=answered
+GET /api/questions?status=unanswered
+POST /api/questions/unanswered
+POST /api/questions/{id}/answer
+```
+
+### Autofill Draft
+
+```http
+POST /api/autofill/draft
+```
+
+Returns review-only fields from the saved profile and answer bank. It never submits forms.
+
+### Interview Prep
+
+```http
+POST /api/interview/prep
+GET /api/interview/saved
+PATCH /api/interview/questions/{id}
+```
+
+Generates Level 1 screening questions and Level 2 technical/role-based questions from optimized resume and full JD.
+
 ## Interview Preparation
 
 ```http

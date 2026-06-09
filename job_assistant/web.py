@@ -12,8 +12,11 @@ import mimetypes
 import re
 import sqlite3
 
+from .ats_prediction import analyze_resume_workflow, apply_approved_suggestions, predict_ats_score
+from .autofill import build_autofill_draft
 from .database import DEFAULT_DB_PATH, JobAssistantDB
-from .interview import evaluate_answer, generate_interview_questions
+from .interview import evaluate_answer, generate_interview_prep, generate_interview_questions
+from .job_extractor import extract_job_from_url
 from .keywords import ROLE_CATALOG
 from .optimizer import analyze_resume_text
 from .search import SUPPORTED_PLATFORMS, build_search_plan
@@ -168,6 +171,29 @@ def create_handler(db: JobAssistantDB) -> type[BaseHTTPRequestHandler]:
                 return HTTPStatus.OK, {"platforms": sorted(SUPPORTED_PLATFORMS)}
             if method == "GET" and path == "/api/search/plan":
                 return HTTPStatus.OK, {"steps": self._search_plan_from_query(query)}
+            if method == "POST" and path == "/api/job-intake/extract":
+                data = _read_json(self)
+                _required(data, "job_url")
+                extracted = extract_job_from_url(data["job_url"])
+                db.save_job_intake(
+                    user["id"],
+                    {
+                        "job_url": data["job_url"],
+                        "source": extracted.get("source", ""),
+                        "extraction_status": "success" if extracted.get("success") else "manual_required",
+                        "extraction_message": extracted.get("message", ""),
+                        "job_details": extracted,
+                    },
+                )
+                if extracted.get("visible_application_questions"):
+                    db.save_unanswered_questions(
+                        user["id"],
+                        list(extracted.get("visible_application_questions", [])),
+                        company_name=str(extracted.get("company_name", "")),
+                        job_title=str(extracted.get("job_title", "")),
+                        job_url=data["job_url"],
+                    )
+                return HTTPStatus.OK, {"job_details": extracted}
             if method == "GET" and path == "/api/applications":
                 return HTTPStatus.OK, {"applications": db.list_applications(user["id"])}
             if method == "POST" and path == "/api/applications":
@@ -191,6 +217,81 @@ def create_handler(db: JobAssistantDB) -> type[BaseHTTPRequestHandler]:
                 return HTTPStatus.CREATED, {"reminder": db.create_reminder(user["id"], data)}
             if method == "GET" and path == "/api/audit-logs":
                 return HTTPStatus.OK, {"audit_logs": db.audit_logs(user["id"])}
+            if method == "POST" and path == "/api/ats/predict":
+                data = _read_json(self)
+                _required(data, "resume_text")
+                job_details = data.get("job_details") or data.get("job_description", "")
+                prediction = predict_ats_score(data["resume_text"], job_details)
+                suggestions = analyze_resume_workflow(data["resume_text"], job_details)["suggestions"]
+                db.audit(user["id"], "predict", "ats", None, {"score": prediction["score"]})
+                return HTTPStatus.OK, {"prediction": prediction, "suggestions": suggestions}
+            if method == "POST" and path == "/api/resume/optimize":
+                data = _read_json(self)
+                _required(data, "resume_text")
+                job_details = data.get("job_details") or data.get("job_description", "")
+                approved = data.get("approved_suggestions") or []
+                before = predict_ats_score(data["resume_text"], job_details)
+                optimized = apply_approved_suggestions(data["resume_text"], approved)
+                after = predict_ats_score(optimized["optimized_resume"], job_details)
+                improvement = after["score"] - before["score"]
+                version = db.create_resume_version(
+                    user["id"],
+                    {
+                        "application_id": data.get("application_id"),
+                        "original_resume": data["resume_text"],
+                        "optimized_resume": optimized["optimized_resume"],
+                        "job_title": (job_details or {}).get("job_title", "") if isinstance(job_details, dict) else data.get("role", ""),
+                        "company": (job_details or {}).get("company_name", "") if isinstance(job_details, dict) else "",
+                        "job_url": (job_details or {}).get("job_url", "") if isinstance(job_details, dict) else "",
+                        "ats_before": before["score"],
+                        "ats_after": after["score"],
+                        "keywords_added": optimized["keywords_added"],
+                    },
+                )
+                return HTTPStatus.OK, {
+                    "before": before,
+                    "after": after,
+                    "improvement_percentage": improvement,
+                    "optimized_resume": optimized["optimized_resume"],
+                    "keywords_added": optimized["keywords_added"],
+                    "resume_version": version,
+                }
+            if method == "GET" and path == "/api/resume/versions":
+                return HTTPStatus.OK, {"resume_versions": db.list_resume_versions(user["id"])}
+            if method == "GET" and path == "/api/questions":
+                status = query.get("status", [None])[0]
+                return HTTPStatus.OK, {"questions": db.list_questions(user["id"], status=status)}
+            if method == "POST" and path == "/api/questions/unanswered":
+                data = _read_json(self)
+                questions = data.get("questions") or []
+                saved = db.save_unanswered_questions(
+                    user["id"],
+                    questions,
+                    company_name=data.get("company_name", ""),
+                    job_title=data.get("job_title", ""),
+                    job_url=data.get("job_url", ""),
+                )
+                return HTTPStatus.CREATED, {"questions": saved}
+            if method == "POST" and path == "/api/autofill/draft":
+                data = _read_json(self)
+                questions = data.get("questions") or []
+                answer_lookup = {}
+                for question in questions:
+                    match = db.find_answer_for_question(user["id"], str(question.get("question", "")))
+                    if match:
+                        answer_lookup[str(question.get("question", ""))] = match["answer"]
+                unanswered = [
+                    question for question in questions if str(question.get("question", "")) not in answer_lookup
+                ]
+                if unanswered:
+                    db.save_unanswered_questions(
+                        user["id"],
+                        unanswered,
+                        company_name=data.get("company_name", ""),
+                        job_title=data.get("job_title", ""),
+                        job_url=data.get("job_url", ""),
+                    )
+                return HTTPStatus.OK, {"autofill": build_autofill_draft(questions, answer_lookup)}
             if method == "POST" and path == "/api/ats/analyze":
                 data = _read_json(self)
                 _required(data, "resume_text", "job_description")
@@ -212,6 +313,21 @@ def create_handler(db: JobAssistantDB) -> type[BaseHTTPRequestHandler]:
                 )
                 db.audit(user["id"], "generate", "interview_questions", None, {"role": data.get("role", "")})
                 return HTTPStatus.OK, {"questions": questions}
+            if method == "POST" and path == "/api/interview/prep":
+                data = _read_json(self)
+                _required(data, "optimized_resume", "job_description")
+                questions = generate_interview_prep(
+                    optimized_resume=data["optimized_resume"],
+                    job_description=data["job_description"],
+                    role=data.get("role", "IT Role"),
+                )
+                flat_questions = [*questions["level_1"], *questions["level_2"]]
+                if data.get("save"):
+                    db.save_interview_questions(user["id"], flat_questions, data.get("application_id"))
+                db.audit(user["id"], "generate", "interview_prep", None, {"count": len(flat_questions)})
+                return HTTPStatus.OK, {"questions": questions}
+            if method == "GET" and path == "/api/interview/saved":
+                return HTTPStatus.OK, {"questions": db.list_interview_questions(user["id"])}
             if method == "POST" and path == "/api/interview/evaluate":
                 data = _read_json(self)
                 _required(data, "question", "answer")
@@ -240,6 +356,22 @@ def create_handler(db: JobAssistantDB) -> type[BaseHTTPRequestHandler]:
                     if not db.delete_application(user["id"], application_id):
                         raise APIError(HTTPStatus.NOT_FOUND, "Application not found")
                     return None
+
+            question_match = re.fullmatch(r"/api/questions/(\d+)/answer", path)
+            if question_match and method in {"POST", "PUT", "PATCH"}:
+                data = _read_json(self)
+                _required(data, "answer")
+                question = db.answer_question(user["id"], int(question_match.group(1)), data["answer"])
+                if not question:
+                    raise APIError(HTTPStatus.NOT_FOUND, "Question not found")
+                return HTTPStatus.OK, {"question": question}
+
+            interview_match = re.fullmatch(r"/api/interview/questions/(\d+)", path)
+            if interview_match and method in {"PATCH", "PUT"}:
+                question = db.update_interview_question(user["id"], int(interview_match.group(1)), _read_json(self))
+                if not question:
+                    raise APIError(HTTPStatus.NOT_FOUND, "Interview question not found")
+                return HTTPStatus.OK, {"question": question}
 
             raise APIError(HTTPStatus.NOT_FOUND, "Route not found")
 

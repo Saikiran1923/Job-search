@@ -49,6 +49,110 @@ def generate_interview_questions(
     }
 
 
+def _question(
+    text: str,
+    level: str,
+    source: str,
+    keywords: list[str],
+    answer_hint: str,
+    confidence: int,
+) -> dict[str, object]:
+    return {
+        "question": text,
+        "difficulty_level": level,
+        "source": source,
+        "suggested_answer": answer_hint,
+        "keywords_to_include": keywords[:8],
+        "confidence_score": confidence,
+    }
+
+
+def generate_interview_prep(
+    optimized_resume: str,
+    job_description: str,
+    role: str = "IT Role",
+) -> dict[str, list[dict[str, object]]]:
+    """Generate Level 1 and Level 2 interview prep from resume and JD."""
+
+    jd_skills = extract_known_skills(job_description)
+    resume_skills = extract_known_skills(optimized_resume)
+    shared = [skill for skill in jd_skills if skill in resume_skills]
+    missing = [skill for skill in jd_skills if skill not in resume_skills]
+    resume_terms = important_terms(optimized_resume, limit=10)
+    jd_terms = important_terms(job_description, limit=12)
+
+    level_1 = [
+        _question(
+            "Tell me about yourself and summarize why your background fits this role.",
+            "Level 1",
+            "Both",
+            shared[:6] or resume_terms[:6],
+            "Use a concise summary: current background, most relevant skills, and why the role is a strong fit.",
+            88 if optimized_resume and job_description else 60,
+        ),
+        _question(
+            f"Why are you interested in this {role} role?",
+            "Level 1",
+            "Job Description",
+            jd_terms[:6],
+            "Connect the company/role responsibilities to your experience and career direction.",
+            82,
+        ),
+        _question(
+            "Explain your most relevant experience for this job.",
+            "Level 1",
+            "Resume",
+            shared[:6] or resume_terms[:6],
+            "Pick one or two resume experiences and describe responsibilities, actions, and results.",
+            84,
+        ),
+        _question(
+            "Which basic skills from the job description have you used before?",
+            "Level 1",
+            "Both",
+            shared[:8],
+            "Name the skills truthfully and give short examples of how you used each one.",
+            86 if shared else 65,
+        ),
+        _question(
+            "Are you authorized and available to work according to this role's requirements?",
+            "Level 1",
+            "Job Description",
+            ["work authorization", "availability"],
+            "Answer directly and consistently with your saved application profile.",
+            78,
+        ),
+    ]
+
+    level_2: list[dict[str, object]] = []
+    for skill in jd_skills[:8]:
+        source = "Both" if skill in resume_skills else "Job Description"
+        confidence = 86 if skill in resume_skills else 68
+        level_2.append(
+            _question(
+                f"How would you apply {skill} to deliver one of the responsibilities in this role?",
+                "Level 2",
+                source,
+                [skill, *jd_terms[:5]],
+                "Explain a concrete project, design choice, troubleshooting step, or learning plan tied to the role.",
+                confidence,
+            )
+        )
+    for gap in missing[:4]:
+        level_2.append(
+            _question(
+                f"The job mentions {gap}. How would you handle this if it is a weaker area?",
+                "Level 2",
+                "Job Description",
+                [gap, "learning plan", "transferable experience"],
+                "Be honest about depth, connect transferable skills, and describe a clear ramp-up plan.",
+                72,
+            )
+        )
+
+    return {"level_1": level_1, "level_2": level_2[:12]}
+
+
 def evaluate_answer(question: str, answer: str, job_description: str = "") -> dict[str, object]:
     """Evaluate an interview answer with simple explainable heuristics."""
 

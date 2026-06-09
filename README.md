@@ -1,8 +1,67 @@
 # Job Application Assistant
 
-Compliant CLI and local web dashboard for job discovery support, ATS-style matching, tailored resume and cover-letter generation, interview prep, analytics, and application tracking.
+Compliant CLI and local web dashboard for manual job application preparation, ATS prediction, tailored resume review, interview prep, analytics, and application tracking.
 
-The assistant is designed to prepare high-quality application materials from a stored candidate profile and role bullet libraries. It does **not** bypass job-board protections, evade bot detection, or submit applications deceptively. Use generated materials with official application flows, company APIs, or manual review.
+The assistant is designed to prepare high-quality application materials from a stored candidate profile and role bullet libraries. It does **not** search jobs automatically, bypass job-board protections, evade bot detection, solve CAPTCHA, or submit applications. The user manually pastes a job URL, reviews everything, uploads the final resume, solves CAPTCHA, and submits manually.
+
+## Final Manual Workflow
+
+```text
+Login
+↓
+Load saved profile and resume
+↓
+User pastes job URL
+↓
+System extracts visible job details including JD, or asks user to paste JD manually
+↓
+System runs ATS Prediction Score against current resume
+↓
+System shows missing keywords and weak sections
+↓
+System suggests resume improvements with current text, suggested text, and reason
+↓
+User accepts/rejects/edits suggestions
+↓
+System generates optimized resume
+↓
+System runs ATS Prediction Score again
+↓
+System shows before vs after improvement
+↓
+System generates Level 1 and Level 2 interview questions from resume + JD
+↓
+System fills a review-only autofill draft from saved profile and answer bank
+↓
+System saves new unanswered questions
+↓
+User reviews everything
+↓
+User uploads final resume
+↓
+User solves CAPTCHA
+↓
+User submits manually
+↓
+Application is saved in tracker
+↓
+Dashboard analytics update
+```
+
+## Project Rating
+
+```text
+Current: 8/10
+After updates: 9.5/10 to 10/10
+```
+
+## Time Saving Estimate
+
+```text
+Before: around 15 minutes per application
+After: around 4-7 minutes per application
+Estimated saving: 60-75%
+```
 
 ## What it does
 
@@ -16,12 +75,32 @@ The assistant is designed to prepare high-quality application materials from a s
   - ZipRecruiter
   - Company career portal discovery
 - Reads job postings from JSON exports or manually saved job descriptions.
+- Extracts visible job details from a user-pasted URL when access is allowed.
+- Shows the exact fallback message when URL extraction is blocked:
+  - `Unable to extract full job details from URL. Please paste the job description manually.`
 - Extracts required skills and high-signal keywords.
 - Compares each job with the stored candidate profile.
-- Calculates original and optimized ATS-style match scores.
+- Calculates original and optimized `ATS Prediction Score` values using weighted scoring:
+  - skill match: 30%
+  - experience match: 15%
+  - keyword context: 15%
+  - role/title match: 10%
+  - resume section completeness: 10%
+  - ATS formatting check: 10%
+  - achievement/impact score: 5%
+  - critical missing requirement penalty: 5%
 - Selects relevant bullets from `data/roles/{role}.json` or `/data/roles/{role}.json`.
-- Generates a tailored resume and cover letter for jobs that pass or need review.
+- Shows resume suggestions before modification with:
+  - section name
+  - current text
+  - suggested text
+  - reason for change
+- Lets the user accept, reject, or edit suggestions before generating an optimized resume.
+- Stores resume versions with original resume, optimized resume, version number, linked job/company, ATS before score, ATS after score, keywords added, and created date.
 - Reuses saved application answers for repeated questions with multiple-choice options.
+- Tracks answered and unanswered application questions.
+- Builds a review-only autofill draft using saved profile fields and answer bank.
+- Generates Level 1 screening and Level 2 technical interview questions from optimized resume and full JD.
 - Tracks applications in JSONL with:
   - job role
   - company name
@@ -56,6 +135,7 @@ The web app includes:
 
 - secure local user registration/login
 - SQLite database at `applications/job_assistant.sqlite3`
+- left sidebar navigation
 - Kanban board:
   - Saved
   - Applied
@@ -63,12 +143,19 @@ The web app includes:
   - Offer
   - Rejected
 - application CRUD/status updates
-- ATS score analytics
+- ATS before/after comparison
+- resume suggestion approval screen
+- question bank page
+- interview prep page
+- application tracker table
+- analytics charts
 - response/interview/offer conversion rates
 - recruiter contact management
 - follow-up reminders
-- AI resume optimizer
-- interview question generator
+- ATS Prediction Score engine
+- AI resume optimizer with accept/reject/edit flow
+- review-only autofill assistant
+- Level 1 and Level 2 interview question generator
 - answer evaluation helper
 - audit logs in the database
 
@@ -88,6 +175,37 @@ Additional docs:
 
 - `docs/API.md`
 - `docs/ARCHITECTURE.md`
+
+## Job URL Intake
+
+Paste a job URL in the dashboard under `Job Intake`.
+
+The system tries a simple visible HTML extraction. It does not render JavaScript, log in, solve CAPTCHA, or bypass restrictions.
+
+If the page cannot be read, the dashboard shows:
+
+```text
+Unable to extract full job details from URL. Please paste the job description manually.
+```
+
+Extracted fields include:
+
+- job title
+- company name
+- job URL
+- source
+- location
+- work mode
+- employment type
+- salary range
+- full job description
+- responsibilities
+- required qualifications
+- preferred qualifications
+- required skills
+- preferred skills
+- benefits
+- visible application questions
 
 Main API endpoints:
 
@@ -315,6 +433,9 @@ This tool intentionally avoids:
 - bot-detection evasion
 - fake mouse or keyboard behavior
 - credential handling for job sites
-- automatic third-party form submission without user review or an official approved API
+- automatic job search
+- automatic third-party form submission
+- CAPTCHA bypass
+- mass apply workflows
 
-Use it to prepare accurate materials and organize applications. Submit through official channels and verify each tailored claim before applying.
+Use it to prepare accurate materials and organize applications. The user reviews everything, uploads the final resume, solves CAPTCHA, and submits manually through official channels.

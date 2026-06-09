@@ -3,135 +3,239 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Job Application Assistant Dashboard</title>
+    <title>Job Application Assistant</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <header class="topbar">
-      <div>
-        <p class="eyebrow">AI Job Application Assistant</p>
-        <h1>Application Command Center</h1>
+    <section id="authView" class="auth-shell">
+      <div class="auth-hero">
+        <p class="eyebrow">Manual-review job application workflow</p>
+        <h1>Prepare stronger applications without auto-submit or CAPTCHA bypass.</h1>
+        <p>Paste a job URL, review extracted details, approve resume changes, prepare answers, and submit manually.</p>
       </div>
-      <div class="session">
-        <span id="userLabel">Not signed in</span>
-        <button id="logoutBtn" class="secondary hidden">Logout</button>
+      <div class="auth-card">
+        <form id="loginForm">
+          <h2>Login</h2>
+          <label>Email<input name="email" type="email" required /></label>
+          <label>Password<input name="password" type="password" required /></label>
+          <button type="submit">Login</button>
+        </form>
+        <form id="registerForm">
+          <h2>Create Account</h2>
+          <label>Name<input name="name" required /></label>
+          <label>Email<input name="email" type="email" required /></label>
+          <label>Password<input name="password" type="password" minlength="8" required /></label>
+          <button type="submit" class="secondary">Register</button>
+        </form>
       </div>
-    </header>
+    </section>
 
-    <main>
-      <section id="authView" class="card auth-card">
-        <div>
-          <h2>Login or create account</h2>
-          <p>Use a local account for your private dashboard database.</p>
+    <section id="appView" class="app-shell hidden">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="logo">JA</span>
+          <div>
+            <strong>Job Assistant</strong>
+            <small>Preparation dashboard</small>
+          </div>
         </div>
-        <div class="grid two">
-          <form id="loginForm">
-            <h3>Login</h3>
-            <label>Email<input name="email" type="email" required /></label>
-            <label>Password<input name="password" type="password" required /></label>
-            <button type="submit">Login</button>
-          </form>
-          <form id="registerForm">
-            <h3>Create account</h3>
-            <label>Name<input name="name" required /></label>
-            <label>Email<input name="email" type="email" required /></label>
-            <label>Password<input name="password" type="password" minlength="8" required /></label>
-            <button type="submit">Register</button>
-          </form>
-        </div>
-      </section>
+        <nav id="nav">
+          <button data-page="dashboard" class="active">Dashboard</button>
+          <button data-page="job-intake">Job Intake</button>
+          <button data-page="ats-analysis">ATS Analysis</button>
+          <button data-page="resume-optimizer">Resume Optimizer</button>
+          <button data-page="autofill">Autofill Assistant</button>
+          <button data-page="question-bank">Question Bank</button>
+          <button data-page="interview-prep">Interview Prep</button>
+          <button data-page="applications">Applications</button>
+          <button data-page="recruiters">Recruiters</button>
+          <button data-page="reminders">Reminders</button>
+          <button data-page="analytics">Analytics</button>
+          <button data-page="settings">Settings</button>
+        </nav>
+      </aside>
 
-      <section id="dashboardView" class="hidden">
-        <section class="stats" id="stats"></section>
+      <div class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow" id="pageEyebrow">Dashboard</p>
+            <h1 id="pageTitle">Application Command Center</h1>
+          </div>
+          <div class="session">
+            <button id="themeBtn" class="ghost">Toggle Theme</button>
+            <span id="userLabel"></span>
+            <button id="logoutBtn" class="secondary">Logout</button>
+          </div>
+        </header>
 
-        <section class="grid two">
-          <form id="applicationForm" class="card">
-            <h2>Add Application</h2>
-            <label>Role<input name="role" required placeholder="Data Engineer" /></label>
-            <label>Title<input name="title" placeholder="Senior Data Engineer" /></label>
-            <label>Company<input name="company" required /></label>
-            <label>URL<input name="url" type="url" required /></label>
-            <label>Source<input name="source" placeholder="LinkedIn, Indeed, company site" /></label>
-            <label>Location<input name="location" placeholder="Remote, Dallas TX" /></label>
-            <label>Work Mode
-              <select name="work_mode">
-                <option value="">Select</option>
-                <option>Remote</option>
-                <option>Hybrid</option>
-                <option>On-site</option>
-              </select>
-            </label>
-            <label>Status
-              <select name="status">
-                <option value="saved">Saved</option>
-                <option value="applied">Applied</option>
-                <option value="interviewing">Interviewing</option>
-                <option value="offer">Offer</option>
-                <option value="rejected">Rejected</option>
-              </select>
-            </label>
-            <label>Optimized ATS Score<input name="optimized_ats_score" type="number" min="0" max="100" value="0" /></label>
-            <label>Follow-up Date<input name="follow_up_at" type="date" /></label>
-            <label>Notes<textarea name="notes" rows="3"></textarea></label>
-            <button type="submit">Save Application</button>
-          </form>
+        <main>
+          <section data-view="dashboard" class="page active">
+            <div id="stats" class="stats"></div>
+            <div class="grid two">
+              <div class="card">
+                <h2>Final Workflow</h2>
+                <ol class="workflow">
+                  <li>Paste job URL</li>
+                  <li>Review extracted details or paste JD manually</li>
+                  <li>Run ATS Prediction Score before changes</li>
+                  <li>Accept, reject, or edit resume suggestions</li>
+                  <li>Generate optimized resume and interview prep</li>
+                  <li>Review autofill draft, solve CAPTCHA, upload resume, submit manually</li>
+                </ol>
+              </div>
+              <div class="card">
+                <h2>Analytics Snapshot</h2>
+                <div id="analyticsSummary"></div>
+              </div>
+            </div>
+          </section>
 
-          <div class="card">
-            <h2>Analytics</h2>
-            <div id="analytics"></div>
-            <h3>Recruiter Contact</h3>
-            <form id="recruiterForm" class="compact-form">
-              <input name="name" required placeholder="Recruiter name" />
-              <input name="email" type="email" placeholder="Email" />
-              <input name="company" placeholder="Company" />
+          <section data-view="job-intake" class="page">
+            <div class="card">
+              <h2>Job URL Full Extraction</h2>
+              <p class="muted">Paste one job URL. If login, CAPTCHA, JavaScript rendering, or restrictions block extraction, paste the JD manually below.</p>
+              <form id="jobExtractForm" class="inline-form">
+                <input name="job_url" type="url" required placeholder="https://company.com/careers/job-id" />
+                <button type="submit">Extract Job Details</button>
+              </form>
+              <pre id="jobExtractOutput"></pre>
+              <label>Manual Job Description<textarea id="manualJobDescription" rows="8" placeholder="Paste full job description here if extraction fails."></textarea></label>
+            </div>
+          </section>
+
+          <section data-view="ats-analysis" class="page">
+            <form id="atsPredictForm" class="card">
+              <h2>ATS Prediction Score</h2>
+              <p class="muted">This is a weighted prediction, not a guaranteed real ATS score.</p>
+              <label>Resume Text<textarea name="resume_text" rows="10" required></textarea></label>
+              <label>Job Description / Details<textarea name="job_description" rows="10" required></textarea></label>
+              <button type="submit">Run ATS Prediction</button>
+            </form>
+            <div id="atsPredictionOutput" class="grid two"></div>
+          </section>
+
+          <section data-view="resume-optimizer" class="page">
+            <div class="card">
+              <h2>Resume Suggestion Approval</h2>
+              <p class="muted">Review each suggestion. Accept, reject, or edit before generating an optimized resume.</p>
+              <div id="suggestionsOutput"></div>
+              <button id="optimizeResumeBtn">Generate Optimized Resume From Accepted Suggestions</button>
+              <pre id="optimizedResumeOutput"></pre>
+            </div>
+          </section>
+
+          <section data-view="autofill" class="page">
+            <div class="card">
+              <h2>Autofill Assistant</h2>
+              <p class="muted">Creates a review-only draft from saved profile and answer bank. It never submits.</p>
+              <button id="buildAutofillBtn">Build Autofill Draft From Visible Questions</button>
+              <pre id="autofillOutput"></pre>
+            </div>
+          </section>
+
+          <section data-view="question-bank" class="page">
+            <div class="grid two">
+              <div class="card">
+                <h2>Unanswered Questions</h2>
+                <div id="unansweredQuestions"></div>
+              </div>
+              <div class="card">
+                <h2>Answered Questions</h2>
+                <div id="answeredQuestions"></div>
+              </div>
+            </div>
+          </section>
+
+          <section data-view="interview-prep" class="page">
+            <form id="interviewPrepForm" class="card">
+              <h2>Interview Prep</h2>
+              <label>Optimized Resume<textarea name="optimized_resume" rows="8" required></textarea></label>
+              <label>Full Job Description<textarea name="job_description" rows="8" required></textarea></label>
+              <label>Role<input name="role" placeholder="Data Engineer" /></label>
+              <button type="submit">Generate Level 1 + Level 2 Questions</button>
+            </form>
+            <div class="card">
+              <div class="toolbar">
+                <h2>Generated Questions</h2>
+                <button id="exportInterviewBtn" class="secondary">Export Interview Questions</button>
+              </div>
+              <div id="interviewPrepOutput"></div>
+            </div>
+          </section>
+
+          <section data-view="applications" class="page">
+            <div class="grid two">
+              <form id="applicationForm" class="card">
+                <h2>Save Application</h2>
+                <label>Role<input name="role" required /></label>
+                <label>Title<input name="title" /></label>
+                <label>Company<input name="company" required /></label>
+                <label>URL<input name="url" type="url" required /></label>
+                <label>Source<input name="source" /></label>
+                <label>Location<input name="location" /></label>
+                <label>Status<select name="status"><option value="saved">Saved</option><option value="applied">Applied</option><option value="interviewing">Interviewing</option><option value="offer">Offer</option><option value="rejected">Rejected</option></select></label>
+                <label>ATS Before<input name="original_ats_score" type="number" min="0" max="100" /></label>
+                <label>ATS After<input name="optimized_ats_score" type="number" min="0" max="100" /></label>
+                <label>Resume Version<input name="resume_version" /></label>
+                <label>Notes<textarea name="notes" rows="3"></textarea></label>
+                <button type="submit">Save Application</button>
+              </form>
+              <div class="card">
+                <h2>Kanban Board</h2>
+                <div id="kanban" class="kanban"></div>
+              </div>
+            </div>
+            <div class="card">
+              <h2>Application Tracker Table</h2>
+              <div id="applicationTable"></div>
+            </div>
+          </section>
+
+          <section data-view="recruiters" class="page">
+            <form id="recruiterForm" class="card">
+              <h2>Recruiter Contact</h2>
+              <label>Name<input name="name" required /></label>
+              <label>Email<input name="email" type="email" /></label>
+              <label>Company<input name="company" /></label>
+              <label>LinkedIn<input name="linkedin" /></label>
+              <label>Notes<textarea name="notes" rows="3"></textarea></label>
               <button type="submit">Add Recruiter</button>
             </form>
-            <div id="recruiters"></div>
-            <h3>Follow-up Reminder</h3>
-            <form id="reminderForm" class="compact-form">
-              <input name="title" required placeholder="Follow up with recruiter" />
-              <input name="due_at" type="date" required />
+            <div id="recruiters" class="card"></div>
+          </section>
+
+          <section data-view="reminders" class="page">
+            <form id="reminderForm" class="card">
+              <h2>Follow-up Reminder</h2>
+              <label>Title<input name="title" required /></label>
+              <label>Due Date<input name="due_at" type="date" required /></label>
+              <label>Notes<textarea name="notes" rows="3"></textarea></label>
               <button type="submit">Add Reminder</button>
             </form>
-            <div id="reminders"></div>
-          </div>
-        </section>
+            <div id="reminders" class="card"></div>
+          </section>
 
-        <section class="card">
-          <h2>Kanban Board</h2>
-          <div class="kanban" id="kanban"></div>
-        </section>
+          <section data-view="analytics" class="page">
+            <div class="card">
+              <h2>Analytics Charts</h2>
+              <div id="analyticsCharts"></div>
+            </div>
+          </section>
 
-        <section class="grid two">
-          <form id="atsForm" class="card">
-            <h2>AI Resume Optimization</h2>
-            <label>Role<input name="role" placeholder="Data Engineer" /></label>
-            <label>Original Resume Text<textarea name="resume_text" rows="8" required></textarea></label>
-            <label>Job Description<textarea name="job_description" rows="8" required></textarea></label>
-            <button type="submit">Analyze Resume</button>
-            <pre id="atsOutput"></pre>
-          </form>
-
-          <div class="card">
-            <form id="interviewForm">
-              <h2>Interview Preparation</h2>
-              <label>Role<input name="role" placeholder="Backend Developer" /></label>
-              <label>Job Description<textarea name="job_description" rows="8" required></textarea></label>
-              <button type="submit">Generate Questions</button>
-            </form>
-            <div id="interviewOutput"></div>
-            <form id="evaluateForm" class="compact-form">
-              <h3>Evaluate Answer</h3>
-              <textarea name="question" rows="2" required placeholder="Paste interview question"></textarea>
-              <textarea name="answer" rows="5" required placeholder="Write your answer"></textarea>
-              <textarea name="job_description" rows="4" placeholder="Optional JD for skill matching"></textarea>
-              <button type="submit">Evaluate Answer</button>
-            </form>
-            <pre id="evaluationOutput"></pre>
-          </div>
-        </section>
-      </section>
-    </main>
+          <section data-view="settings" class="page">
+            <div class="card">
+              <h2>Settings & Safety</h2>
+              <ul>
+                <li>No automatic job search.</li>
+                <li>No automatic application submission.</li>
+                <li>No CAPTCHA bypass.</li>
+                <li>User reviews, uploads final resume, solves CAPTCHA, and submits manually.</li>
+              </ul>
+            </div>
+          </section>
+        </main>
+      </div>
+    </section>
 
     <div id="toast"></div>
     <script src="/app.js"></script>

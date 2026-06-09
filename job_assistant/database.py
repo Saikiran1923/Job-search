@@ -35,6 +35,10 @@ def _json_loads(value: str | None, default: Any) -> Any:
         return default
 
 
+def _normalize_question(value: str) -> str:
+    return " ".join("".join(ch.lower() if ch.isalnum() else " " for ch in value).split())
+
+
 def hash_password(password: str) -> str:
     salt = secrets.token_bytes(16)
     iterations = 200_000
@@ -177,6 +181,50 @@ class JobAssistantDB:
                     created_at TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS job_intakes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    job_url TEXT NOT NULL,
+                    source TEXT DEFAULT '',
+                    extraction_status TEXT NOT NULL,
+                    extraction_message TEXT DEFAULT '',
+                    job_details TEXT DEFAULT '{}',
+                    created_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS question_bank (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    question TEXT NOT NULL,
+                    normalized_question TEXT NOT NULL,
+                    answer TEXT DEFAULT '',
+                    options TEXT DEFAULT '[]',
+                    company_name TEXT DEFAULT '',
+                    job_title TEXT DEFAULT '',
+                    job_url TEXT DEFAULT '',
+                    status TEXT NOT NULL DEFAULT 'unanswered',
+                    usage_count INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS interview_questions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    application_id INTEGER REFERENCES applications(id) ON DELETE SET NULL,
+                    question TEXT NOT NULL,
+                    difficulty_level TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    suggested_answer TEXT DEFAULT '',
+                    keywords TEXT DEFAULT '[]',
+                    confidence_score INTEGER DEFAULT 0,
+                    saved INTEGER NOT NULL DEFAULT 0,
+                    practiced INTEGER NOT NULL DEFAULT 0,
+                    user_answer TEXT DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS audit_logs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -188,6 +236,27 @@ class JobAssistantDB:
                 );
                 """
             )
+            self._migrate(connection)
+
+    def _migrate(self, connection: sqlite3.Connection) -> None:
+        resume_columns = {
+            "original_resume": "TEXT DEFAULT ''",
+            "optimized_resume": "TEXT DEFAULT ''",
+            "version_number": "INTEGER DEFAULT 1",
+            "job_title": "TEXT DEFAULT ''",
+            "company": "TEXT DEFAULT ''",
+            "job_url": "TEXT DEFAULT ''",
+            "ats_before": "INTEGER DEFAULT 0",
+            "ats_after": "INTEGER DEFAULT 0",
+            "keywords_added": "TEXT DEFAULT '[]'",
+        }
+        existing = {
+            row["name"]
+            for row in connection.execute("PRAGMA table_info(resume_versions)").fetchall()
+        }
+        for column, definition in resume_columns.items():
+            if column not in existing:
+                connection.execute(f"ALTER TABLE resume_versions ADD COLUMN {column} {definition}")
 
     def create_user(self, name: str, email: str, password: str, role: str = "user") -> dict[str, Any]:
         timestamp = now_iso()
@@ -555,19 +624,298 @@ class JobAssistantDB:
             self.audit(user_id, "create", "reminder", cursor.lastrowid, data, connection)
             return reminder
 
+    def save_job_intake(self, user_id: int, data: dict[str, Any]) -> dict[str, Any]:
+        timestamp = now_iso()
+        with self.connect() as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO job_intakes (
+                    user_id, job_url, source, extraction_status, extraction_message, job_details, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    user_id,
+                    data.get("job_url", ""),
+                    data.get("source", ""),
+                    data.get("extraction_status", ""),
+                    data.get("extraction_message", ""),
+                    _json_dumps(data.get("job_details") or {}),
+                    timestamp,
+                ),
+            )
+            self.audit(user_id, "create", "job_intake", cursor.lastrowid, data, connection)
+            row = connection.execute(
+                "SELECT * FROM job_intakes WHERE id = ? AND user_id = ?",
+                (cursor.lastrowid, user_id),
+            ).fetchone()
+            item = dict(row)
+            item["job_details"] = _json_loads(item.get("job_details"), {})
+            return item
+
+    def create_resume_version(self, user_id: int, data: dict[str, Any]) -> dict[str, Any]:
+        timestamp = now_iso()
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT COALESCE(MAX(version_number), 0) AS max_version FROM resume_versions WHERE user_id = ?",
+                (user_id,),
+            ).fetchone()
+            version_number = int(data.get("version_number") or (row["max_version"] + 1))
+            label = data.get("label") or f"Resume v{version_number}"
+            cursor = connection.execute(
+                """
+                INSERT INTO resume_versions (
+                    user_id, application_id, label, path, ats_score, notes, original_resume,
+                    optimized_resume, version_number, job_title, company, job_url, ats_before,
+                    ats_after, keywords_added, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    user_id,
+                    data.get("application_id"),
+                    label,
+                    data.get("path", ""),
+                    int(data.get("ats_after") or data.get("ats_score") or 0),
+                    data.get("notes", ""),
+                    data.get("original_resume", ""),
+                    data.get("optimized_resume", ""),
+                    version_number,
+                    data.get("job_title", ""),
+                    data.get("company", ""),
+                    data.get("job_url", ""),
+                    int(data.get("ats_before") or 0),
+                    int(data.get("ats_after") or 0),
+                    _json_dumps(data.get("keywords_added") or []),
+                    timestamp,
+                ),
+            )
+            self.audit(user_id, "create", "resume_version", cursor.lastrowid, data, connection)
+            return self._resume_version_by_id(connection, user_id, cursor.lastrowid)
+
+    def list_resume_versions(self, user_id: int) -> list[dict[str, Any]]:
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM resume_versions WHERE user_id = ? ORDER BY version_number DESC, created_at DESC",
+                (user_id,),
+            ).fetchall()
+            return [self._resume_version_from_row(row) for row in rows]
+
+    def save_unanswered_questions(
+        self,
+        user_id: int,
+        questions: list[dict[str, Any]],
+        company_name: str = "",
+        job_title: str = "",
+        job_url: str = "",
+    ) -> list[dict[str, Any]]:
+        saved = []
+        timestamp = now_iso()
+        with self.connect() as connection:
+            for question_data in questions:
+                question = str(question_data.get("question", "")).strip()
+                if not question:
+                    continue
+                normalized = _normalize_question(question)
+                existing = connection.execute(
+                    "SELECT * FROM question_bank WHERE user_id = ? AND normalized_question = ?",
+                    (user_id, normalized),
+                ).fetchone()
+                if existing:
+                    saved.append(self._question_from_row(existing))
+                    continue
+                cursor = connection.execute(
+                    """
+                    INSERT INTO question_bank (
+                        user_id, question, normalized_question, answer, options, company_name,
+                        job_title, job_url, status, usage_count, created_at, updated_at
+                    )
+                    VALUES (?, ?, ?, '', ?, ?, ?, ?, 'unanswered', 0, ?, ?)
+                    """,
+                    (
+                        user_id,
+                        question,
+                        normalized,
+                        _json_dumps(question_data.get("options") or []),
+                        company_name,
+                        job_title,
+                        job_url,
+                        timestamp,
+                        timestamp,
+                    ),
+                )
+                self.audit(user_id, "create", "question", cursor.lastrowid, {"question": question}, connection)
+                saved.append(
+                    self._question_from_row(
+                        connection.execute(
+                            "SELECT * FROM question_bank WHERE id = ? AND user_id = ?",
+                            (cursor.lastrowid, user_id),
+                        ).fetchone()
+                    )
+                )
+        return saved
+
+    def answer_question(self, user_id: int, question_id: int, answer: str) -> dict[str, Any] | None:
+        timestamp = now_iso()
+        with self.connect() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE question_bank
+                SET answer = ?, status = 'answered', updated_at = ?
+                WHERE user_id = ? AND id = ?
+                """,
+                (answer.strip(), timestamp, user_id, question_id),
+            )
+            if cursor.rowcount == 0:
+                return None
+            self.audit(user_id, "answer", "question", question_id, {}, connection)
+            row = connection.execute(
+                "SELECT * FROM question_bank WHERE id = ? AND user_id = ?",
+                (question_id, user_id),
+            ).fetchone()
+            return self._question_from_row(row)
+
+    def list_questions(self, user_id: int, status: str | None = None) -> list[dict[str, Any]]:
+        with self.connect() as connection:
+            if status:
+                rows = connection.execute(
+                    "SELECT * FROM question_bank WHERE user_id = ? AND status = ? ORDER BY updated_at DESC",
+                    (user_id, status),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    "SELECT * FROM question_bank WHERE user_id = ? ORDER BY updated_at DESC",
+                    (user_id,),
+                ).fetchall()
+            return [self._question_from_row(row) for row in rows]
+
+    def find_answer_for_question(self, user_id: int, question: str) -> dict[str, Any] | None:
+        normalized = _normalize_question(question)
+        tokens = set(normalized.split())
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM question_bank WHERE user_id = ? AND status = 'answered'",
+                (user_id,),
+            ).fetchall()
+            best: tuple[float, sqlite3.Row] | None = None
+            for row in rows:
+                row_tokens = set(str(row["normalized_question"]).split())
+                if not row_tokens:
+                    continue
+                score = len(tokens & row_tokens) / len(tokens | row_tokens)
+                if best is None or score > best[0]:
+                    best = (score, row)
+            if not best or best[0] < 0.35:
+                return None
+            connection.execute(
+                "UPDATE question_bank SET usage_count = usage_count + 1, updated_at = ? WHERE id = ?",
+                (now_iso(), best[1]["id"]),
+            )
+            return self._question_from_row(best[1])
+
+    def save_interview_questions(
+        self,
+        user_id: int,
+        questions: list[dict[str, Any]],
+        application_id: int | None = None,
+    ) -> list[dict[str, Any]]:
+        timestamp = now_iso()
+        saved = []
+        with self.connect() as connection:
+            for question in questions:
+                cursor = connection.execute(
+                    """
+                    INSERT INTO interview_questions (
+                        user_id, application_id, question, difficulty_level, source, suggested_answer,
+                        keywords, confidence_score, saved, practiced, user_answer, created_at, updated_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, '', ?, ?)
+                    """,
+                    (
+                        user_id,
+                        application_id,
+                        question.get("question", ""),
+                        question.get("difficulty_level", ""),
+                        question.get("source", ""),
+                        question.get("suggested_answer", ""),
+                        _json_dumps(question.get("keywords_to_include") or question.get("keywords") or []),
+                        int(question.get("confidence_score") or 0),
+                        1 if question.get("saved") else 0,
+                        timestamp,
+                        timestamp,
+                    ),
+                )
+                saved.append(
+                    self._interview_question_from_row(
+                        connection.execute(
+                            "SELECT * FROM interview_questions WHERE id = ? AND user_id = ?",
+                            (cursor.lastrowid, user_id),
+                        ).fetchone()
+                    )
+                )
+            self.audit(user_id, "create", "interview_questions", None, {"count": len(saved)}, connection)
+        return saved
+
+    def list_interview_questions(self, user_id: int) -> list[dict[str, Any]]:
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM interview_questions WHERE user_id = ? ORDER BY created_at DESC",
+                (user_id,),
+            ).fetchall()
+            return [self._interview_question_from_row(row) for row in rows]
+
+    def update_interview_question(
+        self,
+        user_id: int,
+        question_id: int,
+        data: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        allowed = {"saved", "practiced", "user_answer", "suggested_answer"}
+        updates = {key: value for key, value in data.items() if key in allowed}
+        if not updates:
+            return None
+        columns = []
+        values: list[Any] = []
+        for key, value in updates.items():
+            columns.append(f"{key} = ?")
+            values.append(int(value) if key in {"saved", "practiced"} else value)
+        columns.append("updated_at = ?")
+        values.extend([now_iso(), user_id, question_id])
+        with self.connect() as connection:
+            cursor = connection.execute(
+                f"UPDATE interview_questions SET {', '.join(columns)} WHERE user_id = ? AND id = ?",
+                values,
+            )
+            if cursor.rowcount == 0:
+                return None
+            self.audit(user_id, "update", "interview_question", question_id, updates, connection)
+            row = connection.execute(
+                "SELECT * FROM interview_questions WHERE id = ? AND user_id = ?",
+                (question_id, user_id),
+            ).fetchone()
+            return self._interview_question_from_row(row)
+
     def analytics(self, user_id: int) -> dict[str, Any]:
         applications = self.list_applications(user_id)
+        resume_version_records = self.list_resume_versions(user_id)
+        questions = self.list_questions(user_id)
+        interview_questions = self.list_interview_questions(user_id)
         total = len(applications)
         by_status = {status: 0 for status in STATUSES}
         by_month: dict[str, int] = {}
         ats_scores = []
+        ats_before_scores = []
+        ats_after_scores = []
         resume_versions: dict[str, dict[str, Any]] = {}
         for application in applications:
             by_status[application["status"]] = by_status.get(application["status"], 0) + 1
             month = application["created_at"][:7]
             by_month[month] = by_month.get(month, 0) + 1
+            if application["original_ats_score"]:
+                ats_before_scores.append(application["original_ats_score"])
             if application["optimized_ats_score"]:
                 ats_scores.append(application["optimized_ats_score"])
+                ats_after_scores.append(application["optimized_ats_score"])
             version = application.get("resume_version") or "Unversioned"
             resume_versions.setdefault(version, {"count": 0, "interviews": 0, "offers": 0})
             resume_versions[version]["count"] += 1
@@ -579,15 +927,26 @@ class JobAssistantDB:
         applied = by_status.get("applied", 0) + by_status.get("interviewing", 0) + by_status.get("offer", 0) + by_status.get("rejected", 0)
         interviews = by_status.get("interviewing", 0) + by_status.get("offer", 0)
         offers = by_status.get("offer", 0)
+        before_average = round(sum(ats_before_scores) / len(ats_before_scores), 1) if ats_before_scores else 0
+        after_average = round(sum(ats_after_scores) / len(ats_after_scores), 1) if ats_after_scores else 0
         return {
             "total_applications": total,
+            "applications_tracked": total,
             "by_status": by_status,
             "applications_by_month": by_month,
             "average_ats_score": round(sum(ats_scores) / len(ats_scores), 1) if ats_scores else 0,
+            "ats_before_average": before_average,
+            "ats_after_average": after_average,
+            "average_ats_improvement": round(after_average - before_average, 1) if before_average or after_average else 0,
             "response_rate": round((interviews + by_status.get("rejected", 0)) / applied * 100, 1) if applied else 0,
             "interview_conversion_rate": round(interviews / applied * 100, 1) if applied else 0,
             "offer_conversion_rate": round(offers / applied * 100, 1) if applied else 0,
             "resume_versions": resume_versions,
+            "resume_version_count": len(resume_version_records),
+            "answered_questions": len([question for question in questions if question["status"] == "answered"]),
+            "unanswered_questions": len([question for question in questions if question["status"] == "unanswered"]),
+            "interview_questions_generated": len(interview_questions),
+            "practiced_questions": len([question for question in interview_questions if question["practiced"]]),
         }
 
     def audit_logs(self, user_id: int, limit: int = 50) -> list[dict[str, Any]]:
@@ -612,4 +971,33 @@ class JobAssistantDB:
         item = dict(row)
         item["matched_skills"] = _json_loads(item.get("matched_skills"), [])
         item["missing_skills"] = _json_loads(item.get("missing_skills"), [])
+        return item
+
+    def _resume_version_by_id(
+        self,
+        connection: sqlite3.Connection,
+        user_id: int,
+        version_id: int,
+    ) -> dict[str, Any]:
+        row = connection.execute(
+            "SELECT * FROM resume_versions WHERE id = ? AND user_id = ?",
+            (version_id, user_id),
+        ).fetchone()
+        return self._resume_version_from_row(row)
+
+    def _resume_version_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
+        item = dict(row)
+        item["keywords_added"] = _json_loads(item.get("keywords_added"), [])
+        return item
+
+    def _question_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
+        item = dict(row)
+        item["options"] = _json_loads(item.get("options"), [])
+        return item
+
+    def _interview_question_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
+        item = dict(row)
+        item["keywords"] = _json_loads(item.get("keywords"), [])
+        item["saved"] = bool(item.get("saved"))
+        item["practiced"] = bool(item.get("practiced"))
         return item
