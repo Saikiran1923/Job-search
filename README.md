@@ -1,6 +1,6 @@
 # Job Application Assistant
 
-Compliant CLI assistant for job discovery support, ATS-style matching, tailored resume and cover-letter generation, and application tracking.
+Compliant CLI and local web dashboard for job discovery support, ATS-style matching, tailored resume and cover-letter generation, interview prep, analytics, and application tracking.
 
 The assistant is designed to prepare high-quality application materials from a stored candidate profile and role bullet libraries. It does **not** bypass job-board protections, evade bot detection, or submit applications deceptively. Use generated materials with official application flows, company APIs, or manual review.
 
@@ -31,6 +31,81 @@ The assistant is designed to prepare high-quality application materials from a s
   - cover letter path
   - application status
 - Prevents duplicate processing of the same company and role by default.
+
+## Full Backend API + Frontend Dashboard
+
+Start the local dashboard:
+
+```bash
+python3 -m job_assistant.cli web
+```
+
+On Windows, use:
+
+```bat
+python -m job_assistant.cli web
+```
+
+Then open:
+
+```text
+http://127.0.0.1:8765
+```
+
+The web app includes:
+
+- secure local user registration/login
+- SQLite database at `applications/job_assistant.sqlite3`
+- Kanban board:
+  - Saved
+  - Applied
+  - Interviewing
+  - Offer
+  - Rejected
+- application CRUD/status updates
+- ATS score analytics
+- response/interview/offer conversion rates
+- recruiter contact management
+- follow-up reminders
+- AI resume optimizer
+- interview question generator
+- answer evaluation helper
+- audit logs in the database
+
+Docker run:
+
+```bash
+docker compose up --build
+```
+
+Open:
+
+```text
+http://127.0.0.1:8765
+```
+
+Additional docs:
+
+- `docs/API.md`
+- `docs/ARCHITECTURE.md`
+
+Main API endpoints:
+
+```text
+POST /api/auth/register
+POST /api/auth/login
+GET  /api/applications
+POST /api/applications
+PUT  /api/applications/{id}
+GET  /api/analytics
+GET  /api/recruiters
+POST /api/recruiters
+GET  /api/reminders
+POST /api/reminders
+POST /api/ats/analyze
+POST /api/interview/questions
+POST /api/interview/evaluate
+```
 
 ## Install / run
 
@@ -169,7 +244,6 @@ Each step includes:
 - note to save relevant job descriptions for processing
 
 This command plans the search flow. It does not scrape protected pages or submit applications.
-```
 
 ## Process job postings
 

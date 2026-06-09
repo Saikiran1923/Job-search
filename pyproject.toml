@@ -16,3 +16,6 @@ job-assistant = "job_assistant.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["job_assistant*"]
+
+[tool.setuptools.package-data]
+job_assistant = ["static/*"]

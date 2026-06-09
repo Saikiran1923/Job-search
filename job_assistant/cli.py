@@ -21,6 +21,7 @@ from .models import (
 )
 from .search import SUPPORTED_PLATFORMS, build_search_links, build_search_plan
 from .storage import ApplicationStore
+from .web import run_server
 
 
 DEFAULT_PROFILE = (
@@ -32,6 +33,7 @@ DEFAULT_JOBS = Path("data/jobs/jobs.example.json")
 DEFAULT_ROLES_DIR = Path("/data/roles") if Path("/data/roles").exists() else Path("data/roles")
 DEFAULT_OUTPUT_DIR = Path("applications")
 DEFAULT_TRACKING = Path("applications/applications.jsonl")
+DEFAULT_DB = Path("applications/job_assistant.sqlite3")
 DEFAULT_ANSWERS = (
     Path("/data/application_answers.json")
     if Path("/data/application_answers.json").exists()
@@ -237,6 +239,11 @@ def _cmd_init_answers(args: Namespace) -> int:
     return 0
 
 
+def _cmd_web(args: Namespace) -> int:
+    run_server(host=args.host, port=args.port, db_path=args.db)
+    return 0
+
+
 def build_parser() -> ArgumentParser:
     parser = ArgumentParser(
         prog="job-assistant",
@@ -369,6 +376,15 @@ def build_parser() -> ArgumentParser:
     init_answers.add_argument("--destination", type=Path, default=DEFAULT_ANSWERS)
     init_answers.add_argument("--force", action="store_true")
     init_answers.set_defaults(func=_cmd_init_answers)
+
+    web = subparsers.add_parser(
+        "web",
+        help="Start the local backend API and frontend dashboard.",
+    )
+    web.add_argument("--host", default="127.0.0.1")
+    web.add_argument("--port", type=int, default=8765)
+    web.add_argument("--db", type=Path, default=DEFAULT_DB)
+    web.set_defaults(func=_cmd_web)
     return parser
 
 
