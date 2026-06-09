@@ -121,10 +121,56 @@ Returns original ATS score, optimized score, matched skills, missing skills, sug
 
 ## Final Workflow APIs
 
+### Profile
+
+```http
+GET /api/profile
+POST /api/profile
+DELETE /api/profile
+```
+
+Stores manual profile details used by Application Assist, resume tailoring context, and interview prep.
+
+### Resume Upload
+
+```http
+GET /api/resumes
+POST /api/resumes/upload
+```
+
+JSON upload format:
+
+```json
+{
+  "file_name": "resume.txt",
+  "content_text": "Resume text",
+  "linked_company": "Example",
+  "linked_job": "Data Engineer"
+}
+```
+
+Supported file extensions: PDF, DOCX, TXT. TXT parsing is exact; PDF/DOCX parsing is best effort without extra dependencies.
+
+### Portal Sessions
+
+```http
+GET /api/portal-sessions
+POST /api/portal-sessions
+```
+
+Stores only session status labels:
+
+- Logged in
+- Not connected
+- Session expired
+
+No portal usernames/passwords are stored.
+
 ### Job URL Intake
 
 ```http
 POST /api/job-intake/extract
+POST /api/copilot/run
 ```
 
 ```json
@@ -197,9 +243,18 @@ POST /api/questions/{id}/answer
 
 ```http
 POST /api/autofill/draft
+POST /api/application-assist/draft
 ```
 
 Returns review-only fields from the saved profile and answer bank. It never submits forms.
+
+### Question Delete
+
+```http
+DELETE /api/questions/{id}
+POST   /api/questions/bulk-delete
+POST   /api/questions/clear-unanswered
+```
 
 ### Interview Prep
 

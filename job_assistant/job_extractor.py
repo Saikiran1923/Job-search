@@ -201,6 +201,10 @@ def _blocked(html: str, text: str) -> bool:
         "enable javascript",
         "sign in to view",
         "login to continue",
+        "forgot password",
+        "join now",
+        "sign in",
+        "create account",
         "access denied",
         "unusual traffic",
     ]

@@ -7,6 +7,8 @@ let lastResumeText = "";
 let lastPrediction = null;
 let acceptedSuggestions = [];
 let lastInterviewQuestions = [];
+let lastPipeline = null;
+let latestOptimizedResume = "";
 
 const authView = document.getElementById("authView");
 const appView = document.getElementById("appView");
@@ -64,7 +66,7 @@ async function bootstrap() {
 }
 
 async function refreshAll() {
-  await Promise.all([refreshAnalytics(), refreshApplications(), refreshQuestions(), refreshContacts()]);
+  await Promise.all([refreshAnalytics(), refreshApplications(), refreshQuestions(), refreshContacts(), refreshProfile(), refreshResumes(), refreshPortalSessions()]);
 }
 
 function switchPage(page) {
@@ -87,6 +89,7 @@ async function refreshAnalytics() {
     ["Unanswered Questions", analytics.unanswered_questions],
     ["Interview Questions", analytics.interview_questions_generated],
     ["Practiced Questions", analytics.practiced_questions],
+    ["Application Fields Ready", analytics.application_fields_ready],
   ];
   document.getElementById("stats").innerHTML = cards.map(([label, value]) => `<div class="stat"><span>${label}</span><strong>${value}</strong></div>`).join("");
   document.getElementById("analyticsSummary").innerHTML = `
@@ -95,6 +98,44 @@ async function refreshAnalytics() {
     <div class="metric-row"><span>Offer conversion</span><strong>${analytics.offer_conversion_rate}%</strong></div>
   `;
   document.getElementById("analyticsCharts").innerHTML = renderBars(analytics.by_status);
+}
+
+async function refreshProfile() {
+  const { profile } = await api("/api/profile");
+  const form = document.getElementById("profileForm");
+  if (!form) return;
+  Object.entries(profile || {}).forEach(([key, value]) => {
+    if (form.elements[key]) form.elements[key].value = value || "";
+  });
+}
+
+async function refreshResumes() {
+  const { resumes } = await api("/api/resumes");
+  const latest = resumes[0];
+  if (latest) {
+    lastResumeText = latest.resume_text || lastResumeText;
+    document.getElementById("resumePreview").textContent = latest.resume_text || "";
+  }
+  document.getElementById("resumeVersions").innerHTML = resumes.map((resume) => `
+    <div class="list-item"><strong>v${resume.version_number}</strong> ${escapeHtml(resume.original_file_name)} | ${escapeHtml(resume.upload_date)}<br>${escapeHtml(resume.linked_company || "")} ${escapeHtml(resume.linked_job || "")}</div>
+  `).join("") || "<p class='muted'>No resumes uploaded.</p>";
+}
+
+async function refreshPortalSessions() {
+  const { portal_sessions } = await api("/api/portal-sessions");
+  document.getElementById("portalSessions").innerHTML = portal_sessions.map((session) => `
+    <div class="portal-row">
+      <strong>${escapeHtml(session.portal)}</strong>
+      <span class="pill">${escapeHtml(session.status)}</span>
+      <button data-portal="${escapeAttribute(session.portal)}" data-status="Logged in" class="secondary">Mark Logged In</button>
+      <button data-portal="${escapeAttribute(session.portal)}" data-status="Session expired" class="secondary">Mark Expired</button>
+    </div>
+  `).join("");
+  document.querySelectorAll("[data-portal]").forEach((button) => button.addEventListener("click", async () => {
+    await api("/api/portal-sessions", { method: "POST", body: JSON.stringify({ portal: button.dataset.portal, status: button.dataset.status }) });
+    toast("Portal session status updated");
+    await refreshPortalSessions();
+  }));
 }
 
 function renderBars(values) {
@@ -143,8 +184,8 @@ function renderApplicationCard(item) {
 
 function renderApplicationTable(applications) {
   document.getElementById("applicationTable").innerHTML = `<table>
-    <thead><tr><th>Company</th><th>Role</th><th>Status</th><th>ATS Before</th><th>ATS After</th><th>Resume</th></tr></thead>
-    <tbody>${applications.map((app) => `<tr><td>${escapeHtml(app.company)}</td><td>${escapeHtml(app.role)}</td><td>${escapeHtml(app.status)}</td><td>${app.original_ats_score || 0}%</td><td>${app.optimized_ats_score || 0}%</td><td>${escapeHtml(app.resume_version || "")}</td></tr>`).join("")}</tbody>
+    <thead><tr><th>Company</th><th>Role</th><th>Status</th><th>ATS Before</th><th>ATS After</th><th>Improvement</th><th>Resume</th><th>Unanswered</th><th>Interview Qs</th><th>Follow-up</th></tr></thead>
+    <tbody>${applications.map((app) => `<tr><td>${escapeHtml(app.company)}</td><td>${escapeHtml(app.role)}</td><td>${escapeHtml(app.status)}</td><td>${app.original_ats_score || 0}%</td><td>${app.optimized_ats_score || 0}%</td><td>${app.ats_improvement || 0}%</td><td>${escapeHtml(app.resume_version || "")}</td><td>${app.unanswered_questions_count || 0}</td><td>${app.interview_questions_generated || 0}</td><td>${escapeHtml(app.follow_up_at || "")}</td></tr>`).join("")}</tbody>
   </table>`;
 }
 
@@ -158,11 +199,13 @@ function renderQuestions(questions, allowAnswer) {
   if (!questions.length) return "<p class='muted'>No questions.</p>";
   return questions.map((question) => `
     <div class="question-card">
+      <label class="select-row"><input type="checkbox" data-question-select="${question.id}" /> Select</label>
       <strong>${escapeHtml(question.question)}</strong>
       <p>${escapeHtml(question.company_name || "")} ${escapeHtml(question.job_title || "")}</p>
       ${question.options.length ? `<p>Options: ${question.options.map(escapeHtml).join(", ")}</p>` : ""}
       ${question.answer ? `<p><b>Answer:</b> ${escapeHtml(question.answer)}</p>` : ""}
       ${allowAnswer ? `<form data-answer-form="${question.id}" class="inline-form"><input name="answer" required placeholder="Type answer" /><button>Save Answer</button></form>` : ""}
+      <button data-delete-question="${question.id}" class="secondary" type="button">🗑 Delete</button>
     </div>
   `).join("");
 }
@@ -218,6 +261,14 @@ function renderInterviewPrep(groups) {
   `).join("");
 }
 
+function renderPipeline(statuses = {}) {
+  const steps = ["Extract Job Details", "Validate JD", "ATS Before Score", "Resume Suggestions", "ATS After Score", "Interview Questions", "Application Assist", "Save Tracker"];
+  document.getElementById("pipelineProgress").innerHTML = steps.map((step) => {
+    const status = statuses[step] || "Pending";
+    return `<div class="pipeline-step ${status.toLowerCase()}"><span>${escapeHtml(step)}</span><strong>${escapeHtml(status)}</strong></div>`;
+  }).join("");
+}
+
 function escapeHtml(value) {
   return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
@@ -253,13 +304,85 @@ document.getElementById("logoutBtn").addEventListener("click", async () => {
   clearSession();
 });
 
+document.getElementById("profileForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    await api("/api/profile", { method: "POST", body: JSON.stringify(formData(event.target)) });
+    await refreshAnalytics();
+    toast("Profile saved");
+  } catch (error) { toast(error.message); }
+});
+
+document.getElementById("editProfileBtn").addEventListener("click", () => switchPage("profile"));
+
+document.getElementById("clearProfileBtn").addEventListener("click", async () => {
+  if (!confirm("Clear saved profile?")) return;
+  await api("/api/profile", { method: "DELETE" });
+  document.getElementById("profileForm").reset();
+  await refreshAnalytics();
+  toast("Profile cleared");
+});
+
+document.getElementById("resumeUploadForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const file = event.target.elements.resume_file.files[0];
+  if (!file) return toast("Choose a resume file");
+  const content_text = await file.text();
+  try {
+    const result = await api("/api/resumes/upload", {
+      method: "POST",
+      body: JSON.stringify({
+        file_name: file.name,
+        content_text,
+        linked_company: event.target.elements.linked_company.value,
+        linked_job: event.target.elements.linked_job.value,
+      }),
+    });
+    lastResumeText = result.resume.resume_text;
+    document.getElementById("resumePreview").textContent = result.resume.resume_text;
+    event.target.reset();
+    await refreshResumes();
+    toast("Resume uploaded");
+  } catch (error) { toast(error.message); }
+});
+
+document.getElementById("downloadOptimizedBtn").addEventListener("click", () => {
+  const text = latestOptimizedResume || document.getElementById("optimizedResumeOutput").textContent || lastResumeText;
+  if (!text) return toast("No optimized resume available");
+  const blob = new Blob([text], { type: "text/plain" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "optimized-resume.txt";
+  link.click();
+});
+
 document.getElementById("jobExtractForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
-    const { job_details } = await api("/api/job-intake/extract", { method: "POST", body: JSON.stringify(formData(event.target)) });
+    renderPipeline({ "Extract Job Details": "Running" });
+    const payload = formData(event.target);
+    const jdFile = document.getElementById("jdFileInput").files[0];
+    if (jdFile) payload.manual_jd = await jdFile.text();
+    const { job_details } = await api("/api/job-intake/extract", { method: "POST", body: JSON.stringify(payload) });
     lastJobDetails = job_details;
     document.getElementById("jobExtractOutput").textContent = JSON.stringify(job_details, null, 2);
     if (job_details.full_job_description) document.getElementById("manualJobDescription").value = job_details.full_job_description;
+    if (document.getElementById("autoRunWorkflow").checked && job_details.success) {
+      renderPipeline({ "Extract Job Details": "Completed", "Validate JD": "Running" });
+      const pipelineResult = await api("/api/copilot/run", {
+        method: "POST",
+        body: JSON.stringify({ job_details, resume_text: lastResumeText, auto_run: true }),
+      });
+      lastPipeline = pipelineResult.pipeline;
+      renderPipeline(lastPipeline.statuses);
+      if (lastPipeline.suggestions) renderSuggestions(lastPipeline.suggestions);
+      if (lastPipeline.application_assist) {
+        document.getElementById("autofillOutput").textContent = JSON.stringify(lastPipeline.application_assist, null, 2);
+      }
+      await refreshAll();
+    } else if (!job_details.success) {
+      renderPipeline({ "Extract Job Details": "Failed", "Validate JD": "Pending" });
+    }
     await refreshQuestions();
   } catch (error) { toast(error.message); }
 });
@@ -282,15 +405,17 @@ document.getElementById("optimizeResumeBtn").addEventListener("click", async () 
   try {
     const result = await api("/api/resume/optimize", { method: "POST", body: JSON.stringify({ resume_text: lastResumeText, job_details: lastJobDetails || {}, approved_suggestions: acceptedSuggestions }) });
     document.getElementById("optimizedResumeOutput").textContent = JSON.stringify({ before: result.before.score, after: result.after.score, improvement: result.improvement_percentage, optimized_resume: result.optimized_resume }, null, 2);
+    latestOptimizedResume = result.optimized_resume;
     await refreshAnalytics();
+    await refreshResumes();
   } catch (error) { toast(error.message); }
 });
 
 document.getElementById("buildAutofillBtn").addEventListener("click", async () => {
   const questions = (lastJobDetails && lastJobDetails.visible_application_questions) || [];
   try {
-    const result = await api("/api/autofill/draft", { method: "POST", body: JSON.stringify({ questions, company_name: lastJobDetails?.company_name || "", job_title: lastJobDetails?.job_title || "", job_url: lastJobDetails?.job_url || "" }) });
-    document.getElementById("autofillOutput").textContent = JSON.stringify(result.autofill, null, 2);
+    const result = await api("/api/application-assist/draft", { method: "POST", body: JSON.stringify({ questions, company_name: lastJobDetails?.company_name || "", job_title: lastJobDetails?.job_title || "", job_url: lastJobDetails?.job_url || "" }) });
+    document.getElementById("autofillOutput").textContent = JSON.stringify(result.application_assist, null, 2);
     await refreshQuestions();
   } catch (error) { toast(error.message); }
 });
@@ -319,6 +444,9 @@ document.getElementById("applicationForm").addEventListener("submit", async (eve
   data.ats_score = Number(data.optimized_ats_score || 0);
   data.original_ats_score = Number(data.original_ats_score || 0);
   data.optimized_ats_score = Number(data.optimized_ats_score || 0);
+  data.ats_improvement = Number(data.ats_improvement || (data.optimized_ats_score - data.original_ats_score) || 0);
+  data.unanswered_questions_count = Number(data.unanswered_questions_count || 0);
+  data.interview_questions_generated = Number(data.interview_questions_generated || 0);
   try {
     await api("/api/applications", { method: "POST", body: JSON.stringify(data) });
     event.target.reset();
@@ -337,6 +465,24 @@ document.getElementById("reminderForm").addEventListener("submit", async (event)
   try { await api("/api/reminders", { method: "POST", body: JSON.stringify(formData(event.target)) }); event.target.reset(); await refreshContacts(); toast("Reminder saved"); } catch (error) { toast(error.message); }
 });
 
+document.getElementById("clearUnansweredBtn").addEventListener("click", async () => {
+  if (!confirm("Clear all unanswered questions?")) return;
+  await api("/api/questions/clear-unanswered", { method: "POST" });
+  await refreshQuestions();
+  await refreshAnalytics();
+  toast("Question deleted");
+});
+
+document.getElementById("deleteSelectedQuestionsBtn").addEventListener("click", async () => {
+  const ids = [...document.querySelectorAll("[data-question-select]:checked")].map((item) => Number(item.dataset.questionSelect));
+  if (!ids.length) return toast("Select questions first");
+  if (!confirm(`Delete ${ids.length} selected question(s)?`)) return;
+  await api("/api/questions/bulk-delete", { method: "POST", body: JSON.stringify({ question_ids: ids }) });
+  await refreshQuestions();
+  await refreshAnalytics();
+  toast("Question deleted");
+});
+
 document.addEventListener("submit", async (event) => {
   const form = event.target.closest("[data-answer-form]");
   if (!form) return;
@@ -347,6 +493,16 @@ document.addEventListener("submit", async (event) => {
     await refreshAnalytics();
     toast("Answer saved");
   } catch (error) { toast(error.message); }
+});
+
+document.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-delete-question]");
+  if (!button) return;
+  if (!confirm("Delete this question?")) return;
+  await api(`/api/questions/${button.dataset.deleteQuestion}`, { method: "DELETE" });
+  await refreshQuestions();
+  await refreshAnalytics();
+  toast("Question deleted");
 });
 
 bootstrap();

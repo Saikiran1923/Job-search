@@ -41,10 +41,13 @@
         </div>
         <nav id="nav">
           <button data-page="dashboard" class="active">Dashboard</button>
+          <button data-page="profile">Profile</button>
+          <button data-page="resume-upload">Resume Upload</button>
+          <button data-page="portal-sessions">Portal Sessions</button>
           <button data-page="job-intake">Job Intake</button>
           <button data-page="ats-analysis">ATS Analysis</button>
           <button data-page="resume-optimizer">Resume Optimizer</button>
-          <button data-page="autofill">Autofill Assistant</button>
+          <button data-page="application-assist">Application Assist</button>
           <button data-page="question-bank">Question Bank</button>
           <button data-page="interview-prep">Interview Prep</button>
           <button data-page="applications">Applications</button>
@@ -90,14 +93,78 @@
             </div>
           </section>
 
+          <section data-view="profile" class="page">
+            <form id="profileForm" class="card">
+              <h2>Profile Details</h2>
+              <div class="grid two">
+                <label>First Name<input name="first_name" /></label>
+                <label>Last Name<input name="last_name" /></label>
+                <label>Email<input name="email" type="email" /></label>
+                <label>Phone<input name="phone" /></label>
+                <label>Address<input name="address" /></label>
+                <label>City<input name="city" /></label>
+                <label>State<input name="state" /></label>
+                <label>Zip<input name="zip" /></label>
+                <label>Country<input name="country" /></label>
+                <label>LinkedIn URL<input name="linkedin_url" /></label>
+                <label>Portfolio URL<input name="portfolio_url" /></label>
+                <label>GitHub URL<input name="github_url" /></label>
+                <label>Total Experience<input name="total_experience" /></label>
+                <label>Current Job Title<input name="current_job_title" /></label>
+                <label>Work Authorization<input name="work_authorization" /></label>
+                <label>Sponsorship Required<input name="sponsorship_required" /></label>
+                <label>Relocation Preference<input name="relocation_preference" /></label>
+                <label>Work Mode Preference<input name="work_mode_preference" /></label>
+              </div>
+              <label>Education<textarea name="education" rows="3"></textarea></label>
+              <label>Certifications<textarea name="certifications" rows="3"></textarea></label>
+              <label>Skills<textarea name="skills" rows="4"></textarea></label>
+              <div class="toolbar">
+                <button type="submit">Save Profile</button>
+                <button type="button" id="editProfileBtn" class="secondary">Edit Profile</button>
+                <button type="button" id="clearProfileBtn" class="secondary">Clear Profile</button>
+              </div>
+            </form>
+          </section>
+
+          <section data-view="resume-upload" class="page">
+            <form id="resumeUploadForm" class="card">
+              <h2>Resume Upload</h2>
+              <p class="muted">Supported files: PDF, DOCX, TXT. TXT is parsed exactly; PDF/DOCX are best-effort without extra dependencies.</p>
+              <input name="resume_file" type="file" accept=".pdf,.docx,.txt" required />
+              <label>Linked Company<input name="linked_company" /></label>
+              <label>Linked Job<input name="linked_job" /></label>
+              <button type="submit">Upload Master Resume</button>
+            </form>
+            <div class="card">
+              <div class="toolbar"><h2>Resume Preview</h2><button id="downloadOptimizedBtn" class="secondary">Download Optimized Resume</button></div>
+              <pre id="resumePreview"></pre>
+              <div id="resumeVersions"></div>
+            </div>
+          </section>
+
+          <section data-view="portal-sessions" class="page">
+            <div class="card">
+              <h2>Universal Portal Sessions</h2>
+              <p class="muted">You log in manually in your browser. This app stores only session status notes, never portal usernames/passwords.</p>
+              <div id="portalSessions"></div>
+            </div>
+          </section>
+
           <section data-view="job-intake" class="page">
             <div class="card">
-              <h2>Job URL Full Extraction</h2>
-              <p class="muted">Paste one job URL. If login, CAPTCHA, JavaScript rendering, or restrictions block extraction, paste the JD manually below.</p>
-              <form id="jobExtractForm" class="inline-form">
-                <input name="job_url" type="url" required placeholder="https://company.com/careers/job-id" />
+              <h2>Job URL / JD Intake</h2>
+              <p class="muted">Paste one job URL, use a saved logged-in browser session manually, paste JD text, or upload a JD file. The app only processes the single URL/JD you provide.</p>
+              <label><input id="autoRunWorkflow" type="checkbox" checked /> Auto-run full workflow after job intake</label>
+              <form id="jobExtractForm">
+                <input name="job_url" type="url" placeholder="https://company.com/careers/job-id" />
+                <label>Job Title<input name="job_title" placeholder="Optional if pasting JD manually" /></label>
+                <label>Company<input name="company_name" placeholder="Optional if pasting JD manually" /></label>
+                <label>Paste Job Description Manually<textarea name="manual_jd" rows="8" placeholder="Paste JD if extraction fails or you prefer manual intake."></textarea></label>
+                <label>Upload JD File<input id="jdFileInput" type="file" accept=".txt" /></label>
                 <button type="submit">Extract Job Details</button>
               </form>
+              <div id="pipelineProgress" class="pipeline"></div>
               <pre id="jobExtractOutput"></pre>
               <label>Manual Job Description<textarea id="manualJobDescription" rows="8" placeholder="Paste full job description here if extraction fails."></textarea></label>
             </div>
@@ -124,11 +191,11 @@
             </div>
           </section>
 
-          <section data-view="autofill" class="page">
+          <section data-view="application-assist" class="page">
             <div class="card">
-              <h2>Autofill Assistant</h2>
-              <p class="muted">Creates a review-only draft from saved profile and answer bank. It never submits.</p>
-              <button id="buildAutofillBtn">Build Autofill Draft From Visible Questions</button>
+              <h2>Application Assist</h2>
+              <p class="muted">Creates review-only field suggestions from saved profile and answer bank. It never submits and never bypasses CAPTCHA.</p>
+              <button id="buildAutofillBtn">Fill Application From My Profile</button>
               <pre id="autofillOutput"></pre>
             </div>
           </section>
@@ -136,7 +203,8 @@
           <section data-view="question-bank" class="page">
             <div class="grid two">
               <div class="card">
-                <h2>Unanswered Questions</h2>
+                <div class="toolbar"><h2>Unanswered Questions</h2><button id="clearUnansweredBtn" class="secondary">Clear All Unanswered</button></div>
+                <button id="deleteSelectedQuestionsBtn" class="secondary">Delete Selected</button>
                 <div id="unansweredQuestions"></div>
               </div>
               <div class="card">
@@ -176,7 +244,11 @@
                 <label>Status<select name="status"><option value="saved">Saved</option><option value="applied">Applied</option><option value="interviewing">Interviewing</option><option value="offer">Offer</option><option value="rejected">Rejected</option></select></label>
                 <label>ATS Before<input name="original_ats_score" type="number" min="0" max="100" /></label>
                 <label>ATS After<input name="optimized_ats_score" type="number" min="0" max="100" /></label>
+                <label>ATS Improvement<input name="ats_improvement" type="number" /></label>
                 <label>Resume Version<input name="resume_version" /></label>
+                <label>Unanswered Questions Count<input name="unanswered_questions_count" type="number" min="0" /></label>
+                <label>Interview Questions Generated<input name="interview_questions_generated" type="number" min="0" /></label>
+                <label>Follow-up Date<input name="follow_up_at" type="date" /></label>
                 <label>Notes<textarea name="notes" rows="3"></textarea></label>
                 <button type="submit">Save Application</button>
               </form>

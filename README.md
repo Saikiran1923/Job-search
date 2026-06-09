@@ -1,6 +1,6 @@
-# Job Application Assistant
+# Job Application Copilot
 
-Compliant CLI and local web dashboard for manual job application preparation, ATS prediction, tailored resume review, interview prep, analytics, and application tracking.
+Compliant CLI and local web dashboard for manual-controlled job application preparation, ATS prediction, tailored resume review, interview prep, application field suggestions, question-bank reuse, and tracking.
 
 The assistant is designed to prepare high-quality application materials from a stored candidate profile and role bullet libraries. It does **not** search jobs automatically, bypass job-board protections, evade bot detection, solve CAPTCHA, or submit applications. The user manually pastes a job URL, reviews everything, uploads the final resume, solves CAPTCHA, and submits manually.
 
@@ -65,15 +65,24 @@ Estimated saving: 60-75%
 
 ## What it does
 
-- Generates search URLs for broad IT roles across:
+- Manual-controlled workflow: the user searches jobs outside the app, then pastes a single job URL/JD into Job Intake.
+- Profile page with first name, last name, email, phone, address, city, state, zip, country, LinkedIn, portfolio, GitHub, education, certifications, skills, experience, current title, work authorization, sponsorship, relocation, and work-mode preferences.
+- Resume Upload page for PDF, DOCX, and TXT master resumes, with parsed text preview, replacement uploads, versions, and optimized resume download.
+- Portal Sessions page for local session status only:
   - LinkedIn
   - Indeed
   - Dice
-  - Glassdoor
   - Monster
-  - CareerBuilder
   - ZipRecruiter
-  - Company career portal discovery
+  - Workday
+  - Greenhouse
+  - Lever
+  - iCIMS
+  - Taleo
+  - SuccessFactors
+  - company career sites
+  - unknown job sites
+- No portal usernames or passwords are stored.
 - Reads job postings from JSON exports or manually saved job descriptions.
 - Extracts visible job details from a user-pasted URL when access is allowed.
 - Shows the exact fallback message when URL extraction is blocked:
@@ -99,7 +108,7 @@ Estimated saving: 60-75%
 - Stores resume versions with original resume, optimized resume, version number, linked job/company, ATS before score, ATS after score, keywords added, and created date.
 - Reuses saved application answers for repeated questions with multiple-choice options.
 - Tracks answered and unanswered application questions.
-- Builds a review-only autofill draft using saved profile fields and answer bank.
+- Builds a review-only Application Assist draft using saved profile fields and answer bank.
 - Generates Level 1 screening and Level 2 technical interview questions from optimized resume and full JD.
 - Tracks applications in JSONL with:
   - job role
@@ -159,6 +168,89 @@ The web app includes:
 - answer evaluation helper
 - audit logs in the database
 
+Sidebar pages:
+
+- Dashboard
+- Profile
+- Resume Upload
+- Portal Sessions
+- Job Intake
+- ATS Analysis
+- Resume Optimizer
+- Application Assist
+- Question Bank
+- Interview Prep
+- Applications
+- Recruiters
+- Reminders
+- Analytics
+- Settings
+
+## Profile Details
+
+Open `Profile` in the sidebar.
+
+Use:
+
+- Save Profile
+- Edit Profile
+- Clear Profile
+
+Profile data is used for:
+
+- application field suggestions
+- question-bank answers
+- resume tailoring context
+- interview question generation context
+
+## Resume Upload
+
+Open `Resume Upload` in the sidebar.
+
+Supported:
+
+- PDF
+- DOCX
+- TXT
+
+Features:
+
+- upload master resume
+- parse resume text
+- show resume preview
+- replace resume with a new upload
+- create resume versions
+- download optimized resume as text
+
+Stored:
+
+- original file name
+- parsed resume text
+- upload date
+- version number
+- linked company/job
+- ATS before score
+- ATS after score
+
+## Portal Sessions
+
+Open `Portal Sessions`.
+
+The user logs in manually in their browser. The app stores only a local status note:
+
+- Logged in
+- Not connected
+- Session expired
+
+Rules:
+
+- no username/password storage
+- no CAPTCHA bypass
+- no auto-submit
+- no mass scrape
+- only process the single URL provided by the user
+- ask login again if session expires
+
 Docker run:
 
 ```bash
@@ -181,6 +273,31 @@ Additional docs:
 Paste a job URL in the dashboard under `Job Intake`.
 
 The system tries a simple visible HTML extraction. It does not render JavaScript, log in, solve CAPTCHA, or bypass restrictions.
+
+Input options:
+
+- paste job URL
+- open portal manually using a saved logged-in browser session
+- paste job description manually
+- upload a TXT JD file
+
+Auto-run full workflow after job intake is ON by default. The pipeline progress UI shows:
+
+- Extract Job Details
+- Validate JD
+- ATS Before Score
+- Resume Suggestions
+- ATS After Score
+- Interview Questions
+- Application Assist
+- Save Tracker
+
+Statuses:
+
+- Pending
+- Running
+- Completed
+- Failed
 
 If the page cannot be read, the dashboard shows:
 
@@ -206,6 +323,68 @@ Extracted fields include:
 - preferred skills
 - benefits
 - visible application questions
+
+Validation rejects login/search/invalid pages, including pages where:
+
+- job title is Login, Sign In, or website name
+- full job description is missing or too short
+- page contains only sign-in/join/forgot-password style text
+
+## Application Assist
+
+Application Assist suggests/fills review-only values from saved Profile and Question Bank:
+
+- first name
+- last name
+- email
+- phone
+- address
+- city
+- state
+- zip
+- country
+- LinkedIn
+- portfolio
+- education
+- experience
+- work authorization
+- sponsorship answer
+- saved question-bank answers
+
+Output includes:
+
+- profile fields ready
+- missing profile fields
+- saved answers found
+- unanswered questions found
+
+The user reviews final application fields manually.
+
+## Question Bank
+
+Question Bank has:
+
+- Answered Questions
+- Unanswered Questions
+
+When a new application question appears, the app saves:
+
+- question
+- options, if visible
+- company
+- job title
+- job URL
+- unanswered status
+
+When the user answers it, the app marks it answered and reuses similar answers later.
+
+Delete behavior:
+
+- each question has a delete/trash button
+- confirmation prompt before deletion
+- deleted questions are not reused
+- bulk delete selected questions
+- clear all unanswered questions
 
 Main API endpoints:
 

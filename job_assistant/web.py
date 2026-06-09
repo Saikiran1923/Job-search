@@ -13,12 +13,15 @@ import re
 import sqlite3
 
 from .ats_prediction import analyze_resume_workflow, apply_approved_suggestions, predict_ats_score
-from .autofill import build_autofill_draft
+from .autofill import build_application_assist, build_autofill_draft
+from .copilot import complete_resume_approval, extract_or_manual_job, run_manual_pipeline, validate_job_details
 from .database import DEFAULT_DB_PATH, JobAssistantDB
 from .interview import evaluate_answer, generate_interview_prep, generate_interview_questions
 from .job_extractor import extract_job_from_url
 from .keywords import ROLE_CATALOG
 from .optimizer import analyze_resume_text
+from .portal_sessions import detect_portal
+from .resume_parser import parse_resume_upload
 from .search import SUPPORTED_PLATFORMS, build_search_plan
 
 
@@ -165,6 +168,49 @@ def create_handler(db: JobAssistantDB) -> type[BaseHTTPRequestHandler]:
                 return None
             if method == "GET" and path == "/api/me":
                 return HTTPStatus.OK, {"user": user}
+            if method == "GET" and path == "/api/profile":
+                return HTTPStatus.OK, {"profile": db.get_profile(user["id"])}
+            if method in {"POST", "PUT"} and path == "/api/profile":
+                return HTTPStatus.OK, {"profile": db.save_profile(user["id"], _read_json(self))}
+            if method == "DELETE" and path == "/api/profile":
+                db.clear_profile(user["id"])
+                return None
+            if method == "GET" and path == "/api/resumes":
+                return HTTPStatus.OK, {"resumes": db.list_resume_uploads(user["id"])}
+            if method == "POST" and path == "/api/resumes/upload":
+                data = _read_json(self)
+                _required(data, "file_name")
+                parsed = parse_resume_upload(
+                    file_name=data["file_name"],
+                    content_text=data.get("content_text", ""),
+                    content_base64=data.get("content_base64", ""),
+                )
+                resume = db.create_resume_upload(
+                    user["id"],
+                    {
+                        "original_file_name": data["file_name"],
+                        "file_type": parsed["file_type"],
+                        "resume_text": parsed["resume_text"],
+                        "linked_company": data.get("linked_company", ""),
+                        "linked_job": data.get("linked_job", ""),
+                        "ats_before": data.get("ats_before", 0),
+                        "ats_after": data.get("ats_after", 0),
+                    },
+                )
+                return HTTPStatus.CREATED, {"resume": resume}
+            if method == "GET" and path == "/api/portal-sessions":
+                return HTTPStatus.OK, {"portal_sessions": db.list_portal_sessions(user["id"])}
+            if method in {"POST", "PUT"} and path == "/api/portal-sessions":
+                data = _read_json(self)
+                _required(data, "portal", "status")
+                return HTTPStatus.OK, {
+                    "portal_session": db.upsert_portal_session(
+                        user["id"],
+                        data["portal"],
+                        data["status"],
+                        data.get("session_note", ""),
+                    )
+                }
             if method == "GET" and path == "/api/roles":
                 return HTTPStatus.OK, {"roles": ROLE_CATALOG}
             if method == "GET" and path == "/api/platforms":
@@ -173,12 +219,29 @@ def create_handler(db: JobAssistantDB) -> type[BaseHTTPRequestHandler]:
                 return HTTPStatus.OK, {"steps": self._search_plan_from_query(query)}
             if method == "POST" and path == "/api/job-intake/extract":
                 data = _read_json(self)
-                _required(data, "job_url")
-                extracted = extract_job_from_url(data["job_url"])
+                job_url = data.get("job_url", "")
+                manual_jd = data.get("manual_jd", "")
+                if not job_url and not manual_jd:
+                    raise APIError(HTTPStatus.BAD_REQUEST, "Provide job_url or manual_jd")
+                extracted = extract_or_manual_job(
+                    job_url=job_url,
+                    manual_jd=manual_jd,
+                    job_title=data.get("job_title", ""),
+                    company_name=data.get("company_name", ""),
+                )
+                if extracted.get("success"):
+                    valid, validation_error = validate_job_details(extracted)
+                    if not valid:
+                        extracted = {
+                            **extracted,
+                            "success": False,
+                            "message": validation_error,
+                            "validation_error": validation_error,
+                        }
                 db.save_job_intake(
                     user["id"],
                     {
-                        "job_url": data["job_url"],
+                        "job_url": job_url,
                         "source": extracted.get("source", ""),
                         "extraction_status": "success" if extracted.get("success") else "manual_required",
                         "extraction_message": extracted.get("message", ""),
@@ -191,9 +254,31 @@ def create_handler(db: JobAssistantDB) -> type[BaseHTTPRequestHandler]:
                         list(extracted.get("visible_application_questions", [])),
                         company_name=str(extracted.get("company_name", "")),
                         job_title=str(extracted.get("job_title", "")),
-                        job_url=data["job_url"],
+                        job_url=job_url,
                     )
                 return HTTPStatus.OK, {"job_details": extracted}
+            if method == "POST" and path == "/api/copilot/run":
+                data = _read_json(self)
+                job_details = data.get("job_details") or extract_or_manual_job(
+                    job_url=data.get("job_url", ""),
+                    manual_jd=data.get("manual_jd", ""),
+                    job_title=data.get("job_title", ""),
+                    company_name=data.get("company_name", ""),
+                )
+                resume_text = data.get("resume_text", "")
+                if not resume_text:
+                    latest_resume = db.latest_resume_upload(user["id"])
+                    resume_text = latest_resume["resume_text"] if latest_resume else ""
+                if not resume_text:
+                    raise APIError(HTTPStatus.BAD_REQUEST, "Resume text or uploaded resume is required")
+                run = run_manual_pipeline(
+                    db,
+                    user["id"],
+                    job_details,
+                    resume_text,
+                    auto_run_after_intake=bool(data.get("auto_run", True)),
+                )
+                return HTTPStatus.OK, {"pipeline": run}
             if method == "GET" and path == "/api/applications":
                 return HTTPStatus.OK, {"applications": db.list_applications(user["id"])}
             if method == "POST" and path == "/api/applications":
@@ -256,6 +341,18 @@ def create_handler(db: JobAssistantDB) -> type[BaseHTTPRequestHandler]:
                     "keywords_added": optimized["keywords_added"],
                     "resume_version": version,
                 }
+            if method == "POST" and path == "/api/resume/approve":
+                data = _read_json(self)
+                _required(data, "resume_text")
+                result = complete_resume_approval(
+                    db,
+                    user["id"],
+                    data["resume_text"],
+                    data.get("job_details") or {},
+                    data.get("approved_suggestions") or [],
+                    data.get("application_id"),
+                )
+                return HTTPStatus.OK, result
             if method == "GET" and path == "/api/resume/versions":
                 return HTTPStatus.OK, {"resume_versions": db.list_resume_versions(user["id"])}
             if method == "GET" and path == "/api/questions":
@@ -272,7 +369,14 @@ def create_handler(db: JobAssistantDB) -> type[BaseHTTPRequestHandler]:
                     job_url=data.get("job_url", ""),
                 )
                 return HTTPStatus.CREATED, {"questions": saved}
-            if method == "POST" and path == "/api/autofill/draft":
+            if method == "POST" and path == "/api/questions/bulk-delete":
+                data = _read_json(self)
+                deleted = db.bulk_delete_questions(user["id"], [int(item) for item in data.get("question_ids", [])])
+                return HTTPStatus.OK, {"deleted": deleted}
+            if method == "POST" and path == "/api/questions/clear-unanswered":
+                deleted = db.clear_unanswered_questions(user["id"])
+                return HTTPStatus.OK, {"deleted": deleted}
+            if method == "POST" and path in {"/api/autofill/draft", "/api/application-assist/draft"}:
                 data = _read_json(self)
                 questions = data.get("questions") or []
                 answer_lookup = {}
@@ -291,7 +395,11 @@ def create_handler(db: JobAssistantDB) -> type[BaseHTTPRequestHandler]:
                         job_title=data.get("job_title", ""),
                         job_url=data.get("job_url", ""),
                     )
-                return HTTPStatus.OK, {"autofill": build_autofill_draft(questions, answer_lookup)}
+                profile = db.get_profile(user["id"])
+                return HTTPStatus.OK, {
+                    "application_assist": build_application_assist(profile, questions, answer_lookup),
+                    "autofill": build_autofill_draft(questions, answer_lookup),
+                }
             if method == "POST" and path == "/api/ats/analyze":
                 data = _read_json(self)
                 _required(data, "resume_text", "job_description")
@@ -365,6 +473,12 @@ def create_handler(db: JobAssistantDB) -> type[BaseHTTPRequestHandler]:
                 if not question:
                     raise APIError(HTTPStatus.NOT_FOUND, "Question not found")
                 return HTTPStatus.OK, {"question": question}
+
+            question_delete_match = re.fullmatch(r"/api/questions/(\d+)", path)
+            if question_delete_match and method == "DELETE":
+                if not db.delete_question(user["id"], int(question_delete_match.group(1))):
+                    raise APIError(HTTPStatus.NOT_FOUND, "Question not found")
+                return HTTPStatus.OK, {"message": "Question deleted"}
 
             interview_match = re.fullmatch(r"/api/interview/questions/(\d+)", path)
             if interview_match and method in {"PATCH", "PUT"}:

@@ -76,3 +76,52 @@ def build_autofill_draft(
         "unanswered_questions": unanswered,
         "stop_before_final_submission": True,
     }
+
+
+def build_application_assist(
+    profile: dict[str, Any],
+    questions: list[dict[str, Any]],
+    answer_lookup: dict[str, str],
+) -> dict[str, Any]:
+    """Build review-only application field suggestions from saved profile data."""
+
+    field_map = {
+        "first_name": profile.get("first_name", ""),
+        "last_name": profile.get("last_name", ""),
+        "email": profile.get("email", ""),
+        "phone": profile.get("phone", ""),
+        "address": profile.get("address", ""),
+        "city": profile.get("city", ""),
+        "state": profile.get("state", ""),
+        "zip": profile.get("zip", ""),
+        "country": profile.get("country", ""),
+        "linkedin": profile.get("linkedin_url", ""),
+        "portfolio": profile.get("portfolio_url", ""),
+        "github": profile.get("github_url", ""),
+        "education": profile.get("education", ""),
+        "experience": profile.get("total_experience", ""),
+        "work_authorization": profile.get("work_authorization", ""),
+        "sponsorship_answer": profile.get("sponsorship_required", ""),
+        "relocation_preference": profile.get("relocation_preference", ""),
+        "work_mode_preference": profile.get("work_mode_preference", ""),
+    }
+    missing = [field for field, value in field_map.items() if not str(value).strip()]
+    saved_answers = []
+    unanswered = []
+    for question in questions:
+        text = str(question.get("question", "")).strip()
+        if not text:
+            continue
+        if text in answer_lookup:
+            saved_answers.append({"question": text, "answer": answer_lookup[text], "options": question.get("options", [])})
+        else:
+            unanswered.append({"question": text, "options": question.get("options", [])})
+    return {
+        "mode": "review_only",
+        "safety_note": "Application Assist suggests fields only. User reviews, uploads final resume, solves CAPTCHA, and submits manually.",
+        "profile_fields_ready": {field: value for field, value in field_map.items() if str(value).strip()},
+        "missing_profile_fields": missing,
+        "saved_answers_found": saved_answers,
+        "unanswered_questions_found": unanswered,
+        "stop_before_final_submission": True,
+    }

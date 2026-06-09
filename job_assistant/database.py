@@ -16,6 +16,21 @@ import sqlite3
 
 DEFAULT_DB_PATH = Path("applications/job_assistant.sqlite3")
 STATUSES = ("saved", "applied", "interviewing", "offer", "rejected")
+SUPPORTED_PORTALS = (
+    "LinkedIn",
+    "Indeed",
+    "Dice",
+    "Monster",
+    "ZipRecruiter",
+    "Workday",
+    "Greenhouse",
+    "Lever",
+    "iCIMS",
+    "Taleo",
+    "SuccessFactors",
+    "Company career sites",
+    "Unknown job sites",
+)
 
 
 def now_iso() -> str:
@@ -225,6 +240,78 @@ class JobAssistantDB:
                     updated_at TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS profiles (
+                    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+                    first_name TEXT DEFAULT '',
+                    last_name TEXT DEFAULT '',
+                    email TEXT DEFAULT '',
+                    phone TEXT DEFAULT '',
+                    address TEXT DEFAULT '',
+                    city TEXT DEFAULT '',
+                    state TEXT DEFAULT '',
+                    zip TEXT DEFAULT '',
+                    country TEXT DEFAULT '',
+                    linkedin_url TEXT DEFAULT '',
+                    portfolio_url TEXT DEFAULT '',
+                    github_url TEXT DEFAULT '',
+                    education TEXT DEFAULT '',
+                    certifications TEXT DEFAULT '',
+                    skills TEXT DEFAULT '',
+                    total_experience TEXT DEFAULT '',
+                    current_job_title TEXT DEFAULT '',
+                    work_authorization TEXT DEFAULT '',
+                    sponsorship_required TEXT DEFAULT '',
+                    relocation_preference TEXT DEFAULT '',
+                    work_mode_preference TEXT DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS resume_uploads (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    original_file_name TEXT NOT NULL,
+                    file_type TEXT NOT NULL,
+                    resume_text TEXT NOT NULL,
+                    upload_date TEXT NOT NULL,
+                    version_number INTEGER NOT NULL,
+                    linked_company TEXT DEFAULT '',
+                    linked_job TEXT DEFAULT '',
+                    ats_before INTEGER DEFAULT 0,
+                    ats_after INTEGER DEFAULT 0,
+                    is_master INTEGER NOT NULL DEFAULT 1
+                );
+
+                CREATE TABLE IF NOT EXISTS portal_sessions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    portal TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'Not connected',
+                    session_note TEXT DEFAULT '',
+                    last_checked_at TEXT DEFAULT '',
+                    expires_at TEXT DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    UNIQUE(user_id, portal)
+                );
+
+                CREATE TABLE IF NOT EXISTS pipeline_runs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    job_url TEXT DEFAULT '',
+                    job_details TEXT DEFAULT '{}',
+                    resume_text TEXT DEFAULT '',
+                    statuses TEXT DEFAULT '{}',
+                    ats_before INTEGER DEFAULT 0,
+                    ats_after INTEGER DEFAULT 0,
+                    optimized_resume TEXT DEFAULT '',
+                    suggestions TEXT DEFAULT '[]',
+                    application_assist TEXT DEFAULT '{}',
+                    application_id INTEGER REFERENCES applications(id) ON DELETE SET NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS audit_logs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -239,6 +326,33 @@ class JobAssistantDB:
             self._migrate(connection)
 
     def _migrate(self, connection: sqlite3.Connection) -> None:
+        application_columns = {
+            "ats_improvement": "INTEGER DEFAULT 0",
+            "unanswered_questions_count": "INTEGER DEFAULT 0",
+            "interview_questions_generated": "INTEGER DEFAULT 0",
+            "employment_type": "TEXT DEFAULT ''",
+            "salary_range": "TEXT DEFAULT ''",
+        }
+        existing_app_columns = {
+            row["name"]
+            for row in connection.execute("PRAGMA table_info(applications)").fetchall()
+        }
+        for column, definition in application_columns.items():
+            if column not in existing_app_columns:
+                connection.execute(f"ALTER TABLE applications ADD COLUMN {column} {definition}")
+
+        question_columns = {
+            "deleted": "INTEGER NOT NULL DEFAULT 0",
+            "deleted_at": "TEXT DEFAULT ''",
+        }
+        existing_question_columns = {
+            row["name"]
+            for row in connection.execute("PRAGMA table_info(question_bank)").fetchall()
+        }
+        for column, definition in question_columns.items():
+            if column not in existing_question_columns:
+                connection.execute(f"ALTER TABLE question_bank ADD COLUMN {column} {definition}")
+
         resume_columns = {
             "original_resume": "TEXT DEFAULT ''",
             "optimized_resume": "TEXT DEFAULT ''",
@@ -337,6 +451,209 @@ class JobAssistantDB:
         with self.connect() as connection:
             connection.execute("DELETE FROM sessions WHERE token = ?", (token,))
 
+    def save_profile(self, user_id: int, data: dict[str, Any]) -> dict[str, Any]:
+        timestamp = now_iso()
+        fields = [
+            "first_name",
+            "last_name",
+            "email",
+            "phone",
+            "address",
+            "city",
+            "state",
+            "zip",
+            "country",
+            "linkedin_url",
+            "portfolio_url",
+            "github_url",
+            "education",
+            "certifications",
+            "skills",
+            "total_experience",
+            "current_job_title",
+            "work_authorization",
+            "sponsorship_required",
+            "relocation_preference",
+            "work_mode_preference",
+        ]
+        values = {field: str(data.get(field, "")).strip() for field in fields}
+        with self.connect() as connection:
+            existing = connection.execute(
+                "SELECT user_id FROM profiles WHERE user_id = ?",
+                (user_id,),
+            ).fetchone()
+            if existing:
+                assignments = ", ".join(f"{field} = ?" for field in fields)
+                connection.execute(
+                    f"UPDATE profiles SET {assignments}, updated_at = ? WHERE user_id = ?",
+                    [values[field] for field in fields] + [timestamp, user_id],
+                )
+                action = "update"
+            else:
+                connection.execute(
+                    f"""
+                    INSERT INTO profiles (
+                        user_id, {', '.join(fields)}, created_at, updated_at
+                    )
+                    VALUES ({', '.join(['?'] * (len(fields) + 3))})
+                    """,
+                    [user_id] + [values[field] for field in fields] + [timestamp, timestamp],
+                )
+                action = "create"
+            self.audit(user_id, action, "profile", user_id, values, connection)
+            return self.get_profile(user_id, connection=connection)
+
+    def get_profile(
+        self,
+        user_id: int,
+        connection: sqlite3.Connection | None = None,
+    ) -> dict[str, Any]:
+        def _get(conn: sqlite3.Connection) -> dict[str, Any]:
+            row = conn.execute("SELECT * FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
+            return dict(row) if row else {}
+
+        if connection:
+            return _get(connection)
+        with self.connect() as conn:
+            return _get(conn)
+
+    def clear_profile(self, user_id: int) -> bool:
+        with self.connect() as connection:
+            cursor = connection.execute("DELETE FROM profiles WHERE user_id = ?", (user_id,))
+            deleted = cursor.rowcount > 0
+            if deleted:
+                self.audit(user_id, "delete", "profile", user_id, {}, connection)
+            return deleted
+
+    def profile_fields_ready_count(self, user_id: int) -> int:
+        profile = self.get_profile(user_id)
+        fields = [
+            "first_name",
+            "last_name",
+            "email",
+            "phone",
+            "address",
+            "city",
+            "state",
+            "zip",
+            "country",
+            "linkedin_url",
+            "portfolio_url",
+            "education",
+            "skills",
+            "work_authorization",
+            "sponsorship_required",
+        ]
+        return sum(1 for field in fields if str(profile.get(field, "")).strip())
+
+    def create_resume_upload(self, user_id: int, data: dict[str, Any]) -> dict[str, Any]:
+        timestamp = now_iso()
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT COALESCE(MAX(version_number), 0) AS max_version FROM resume_uploads WHERE user_id = ?",
+                (user_id,),
+            ).fetchone()
+            version_number = int(data.get("version_number") or (row["max_version"] + 1))
+            cursor = connection.execute(
+                """
+                INSERT INTO resume_uploads (
+                    user_id, original_file_name, file_type, resume_text, upload_date, version_number,
+                    linked_company, linked_job, ats_before, ats_after, is_master
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    user_id,
+                    data.get("original_file_name", ""),
+                    data.get("file_type", ""),
+                    data.get("resume_text", ""),
+                    timestamp,
+                    version_number,
+                    data.get("linked_company", ""),
+                    data.get("linked_job", ""),
+                    int(data.get("ats_before") or 0),
+                    int(data.get("ats_after") or 0),
+                    1 if data.get("is_master", True) else 0,
+                ),
+            )
+            self.audit(user_id, "create", "resume_upload", cursor.lastrowid, data, connection)
+            row = connection.execute(
+                "SELECT * FROM resume_uploads WHERE id = ? AND user_id = ?",
+                (cursor.lastrowid, user_id),
+            ).fetchone()
+            return dict(row)
+
+    def list_resume_uploads(self, user_id: int) -> list[dict[str, Any]]:
+        with self.connect() as connection:
+            return [
+                dict(row)
+                for row in connection.execute(
+                    "SELECT * FROM resume_uploads WHERE user_id = ? ORDER BY version_number DESC",
+                    (user_id,),
+                ).fetchall()
+            ]
+
+    def latest_resume_upload(self, user_id: int) -> dict[str, Any] | None:
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM resume_uploads WHERE user_id = ? ORDER BY version_number DESC LIMIT 1",
+                (user_id,),
+            ).fetchone()
+            return dict(row) if row else None
+
+    def upsert_portal_session(self, user_id: int, portal: str, status: str, note: str = "") -> dict[str, Any]:
+        if portal not in SUPPORTED_PORTALS:
+            portal = "Unknown job sites"
+        if status not in {"Logged in", "Not connected", "Session expired"}:
+            raise ValueError("Unsupported portal session status")
+        timestamp = now_iso()
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO portal_sessions (
+                    user_id, portal, status, session_note, last_checked_at, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(user_id, portal) DO UPDATE SET
+                    status = excluded.status,
+                    session_note = excluded.session_note,
+                    last_checked_at = excluded.last_checked_at,
+                    updated_at = excluded.updated_at
+                """,
+                (user_id, portal, status, note, timestamp, timestamp, timestamp),
+            )
+            self.audit(user_id, "update", "portal_session", None, {"portal": portal, "status": status}, connection)
+            row = connection.execute(
+                "SELECT * FROM portal_sessions WHERE user_id = ? AND portal = ?",
+                (user_id, portal),
+            ).fetchone()
+            return dict(row)
+
+    def list_portal_sessions(self, user_id: int) -> list[dict[str, Any]]:
+        with self.connect() as connection:
+            existing = {
+                row["portal"]: dict(row)
+                for row in connection.execute(
+                    "SELECT * FROM portal_sessions WHERE user_id = ?",
+                    (user_id,),
+                ).fetchall()
+            }
+        sessions = []
+        for portal in SUPPORTED_PORTALS:
+            sessions.append(
+                existing.get(
+                    portal,
+                    {
+                        "portal": portal,
+                        "status": "Not connected",
+                        "session_note": "",
+                        "last_checked_at": "",
+                        "expires_at": "",
+                    },
+                )
+            )
+        return sessions
+
     def audit(
         self,
         user_id: int | None,
@@ -404,9 +721,10 @@ class JobAssistantDB:
                     user_id, recruiter_id, role, title, company, url, source, location, salary,
                     work_mode, status, ats_score, original_ats_score, optimized_ats_score,
                     matched_skills, missing_skills, resume_path, cover_letter_path, resume_version,
-                    notes, follow_up_at, applied_at, created_at, updated_at
+                    notes, follow_up_at, applied_at, ats_improvement, unanswered_questions_count,
+                    interview_questions_generated, employment_type, salary_range, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     user_id,
@@ -431,6 +749,11 @@ class JobAssistantDB:
                     data.get("notes", "").strip(),
                     data.get("follow_up_at", "").strip(),
                     data.get("applied_at", "").strip(),
+                    int(data.get("ats_improvement") or 0),
+                    int(data.get("unanswered_questions_count") or 0),
+                    int(data.get("interview_questions_generated") or 0),
+                    data.get("employment_type", "").strip(),
+                    data.get("salary_range", "").strip(),
                     timestamp,
                     timestamp,
                 ),
@@ -486,6 +809,11 @@ class JobAssistantDB:
             "notes",
             "follow_up_at",
             "applied_at",
+            "ats_improvement",
+            "unanswered_questions_count",
+            "interview_questions_generated",
+            "employment_type",
+            "salary_range",
         }
         updates = {key: value for key, value in data.items() if key in allowed}
         if "status" in updates and updates["status"] not in STATUSES:
@@ -499,7 +827,7 @@ class JobAssistantDB:
             columns.append(f"{key} = ?")
             if key in {"matched_skills", "missing_skills"}:
                 values.append(_json_dumps(value or []))
-            elif key in {"ats_score", "original_ats_score", "optimized_ats_score"}:
+            elif key in {"ats_score", "original_ats_score", "optimized_ats_score", "ats_improvement", "unanswered_questions_count", "interview_questions_generated"}:
                 values.append(int(value or 0))
             else:
                 values.append(value)
@@ -718,7 +1046,7 @@ class JobAssistantDB:
                     continue
                 normalized = _normalize_question(question)
                 existing = connection.execute(
-                    "SELECT * FROM question_bank WHERE user_id = ? AND normalized_question = ?",
+                    "SELECT * FROM question_bank WHERE user_id = ? AND normalized_question = ? AND deleted = 0",
                     (user_id, normalized),
                 ).fetchone()
                 if existing:
@@ -762,7 +1090,7 @@ class JobAssistantDB:
                 """
                 UPDATE question_bank
                 SET answer = ?, status = 'answered', updated_at = ?
-                WHERE user_id = ? AND id = ?
+                WHERE user_id = ? AND id = ? AND deleted = 0
                 """,
                 (answer.strip(), timestamp, user_id, question_id),
             )
@@ -779,12 +1107,12 @@ class JobAssistantDB:
         with self.connect() as connection:
             if status:
                 rows = connection.execute(
-                    "SELECT * FROM question_bank WHERE user_id = ? AND status = ? ORDER BY updated_at DESC",
+                    "SELECT * FROM question_bank WHERE user_id = ? AND status = ? AND deleted = 0 ORDER BY updated_at DESC",
                     (user_id, status),
                 ).fetchall()
             else:
                 rows = connection.execute(
-                    "SELECT * FROM question_bank WHERE user_id = ? ORDER BY updated_at DESC",
+                    "SELECT * FROM question_bank WHERE user_id = ? AND deleted = 0 ORDER BY updated_at DESC",
                     (user_id,),
                 ).fetchall()
             return [self._question_from_row(row) for row in rows]
@@ -794,7 +1122,7 @@ class JobAssistantDB:
         tokens = set(normalized.split())
         with self.connect() as connection:
             rows = connection.execute(
-                "SELECT * FROM question_bank WHERE user_id = ? AND status = 'answered'",
+                "SELECT * FROM question_bank WHERE user_id = ? AND status = 'answered' AND deleted = 0",
                 (user_id,),
             ).fetchall()
             best: tuple[float, sqlite3.Row] | None = None
@@ -812,6 +1140,53 @@ class JobAssistantDB:
                 (now_iso(), best[1]["id"]),
             )
             return self._question_from_row(best[1])
+
+    def delete_question(self, user_id: int, question_id: int) -> bool:
+        timestamp = now_iso()
+        with self.connect() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE question_bank
+                SET deleted = 1, deleted_at = ?, updated_at = ?
+                WHERE user_id = ? AND id = ?
+                """,
+                (timestamp, timestamp, user_id, question_id),
+            )
+            deleted = cursor.rowcount > 0
+            if deleted:
+                self.audit(user_id, "delete", "question", question_id, {}, connection)
+            return deleted
+
+    def bulk_delete_questions(self, user_id: int, question_ids: list[int]) -> int:
+        if not question_ids:
+            return 0
+        timestamp = now_iso()
+        placeholders = ", ".join("?" for _ in question_ids)
+        with self.connect() as connection:
+            cursor = connection.execute(
+                f"""
+                UPDATE question_bank
+                SET deleted = 1, deleted_at = ?, updated_at = ?
+                WHERE user_id = ? AND id IN ({placeholders})
+                """,
+                [timestamp, timestamp, user_id, *question_ids],
+            )
+            self.audit(user_id, "bulk_delete", "question", None, {"count": cursor.rowcount}, connection)
+            return cursor.rowcount
+
+    def clear_unanswered_questions(self, user_id: int) -> int:
+        timestamp = now_iso()
+        with self.connect() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE question_bank
+                SET deleted = 1, deleted_at = ?, updated_at = ?
+                WHERE user_id = ? AND status = 'unanswered' AND deleted = 0
+                """,
+                (timestamp, timestamp, user_id),
+            )
+            self.audit(user_id, "clear_unanswered", "question", None, {"count": cursor.rowcount}, connection)
+            return cursor.rowcount
 
     def save_interview_questions(
         self,
@@ -895,6 +1270,42 @@ class JobAssistantDB:
             ).fetchone()
             return self._interview_question_from_row(row)
 
+    def create_pipeline_run(self, user_id: int, data: dict[str, Any]) -> dict[str, Any]:
+        timestamp = now_iso()
+        with self.connect() as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO pipeline_runs (
+                    user_id, job_url, job_details, resume_text, statuses, ats_before,
+                    ats_after, optimized_resume, suggestions, application_assist,
+                    application_id, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    user_id,
+                    data.get("job_url", ""),
+                    _json_dumps(data.get("job_details") or {}),
+                    data.get("resume_text", ""),
+                    _json_dumps(data.get("statuses") or {}),
+                    int(data.get("ats_before") or 0),
+                    int(data.get("ats_after") or 0),
+                    data.get("optimized_resume", ""),
+                    _json_dumps(data.get("suggestions") or []),
+                    _json_dumps(data.get("application_assist") or {}),
+                    data.get("application_id"),
+                    timestamp,
+                    timestamp,
+                ),
+            )
+            self.audit(user_id, "create", "pipeline_run", cursor.lastrowid, {}, connection)
+            return self._pipeline_run_from_row(
+                connection.execute(
+                    "SELECT * FROM pipeline_runs WHERE id = ? AND user_id = ?",
+                    (cursor.lastrowid, user_id),
+                ).fetchone()
+            )
+
     def analytics(self, user_id: int) -> dict[str, Any]:
         applications = self.list_applications(user_id)
         resume_version_records = self.list_resume_versions(user_id)
@@ -947,6 +1358,7 @@ class JobAssistantDB:
             "unanswered_questions": len([question for question in questions if question["status"] == "unanswered"]),
             "interview_questions_generated": len(interview_questions),
             "practiced_questions": len([question for question in interview_questions if question["practiced"]]),
+            "application_fields_ready": self.profile_fields_ready_count(user_id),
         }
 
     def audit_logs(self, user_id: int, limit: int = 50) -> list[dict[str, Any]]:
@@ -993,6 +1405,14 @@ class JobAssistantDB:
     def _question_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
         item = dict(row)
         item["options"] = _json_loads(item.get("options"), [])
+        return item
+
+    def _pipeline_run_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
+        item = dict(row)
+        item["job_details"] = _json_loads(item.get("job_details"), {})
+        item["statuses"] = _json_loads(item.get("statuses"), {})
+        item["suggestions"] = _json_loads(item.get("suggestions"), [])
+        item["application_assist"] = _json_loads(item.get("application_assist"), {})
         return item
 
     def _interview_question_from_row(self, row: sqlite3.Row) -> dict[str, Any]:

@@ -180,6 +180,47 @@ pre {
   padding: 14px;
   margin: 10px 0;
 }
+.portal-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 12px;
+  margin: 10px 0;
+}
+.pipeline {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0;
+}
+.pipeline-step {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px;
+  background: var(--surface-2);
+}
+.pipeline-step span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+.pipeline-step.running { border-color: var(--warning); }
+.pipeline-step.completed { border-color: var(--success); }
+.pipeline-step.failed { border-color: var(--danger); }
+.select-row {
+  display: flex;
+  grid-template-columns: none;
+  align-items: center;
+  gap: 8px;
+}
+.select-row input {
+  width: auto;
+}
 .application p, .question-card p, .suggestion-card p { color: var(--muted); margin: 6px 0; }
 .application a { color: var(--primary); font-weight: 800; }
 .pill {
