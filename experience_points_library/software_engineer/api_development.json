@@ -1,0 +1,10 @@
+{
+  "points": [
+    {
+      "skill": "API Development",
+      "category": "Engineering",
+      "point": "Built and maintained API functionality with validation, error handling, and clear integration behavior.",
+      "priority": 1
+    }
+  ]
+}

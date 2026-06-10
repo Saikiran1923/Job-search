@@ -315,6 +315,14 @@ Job intake statuses:
 
 The app never shows only `Failed` for job intake; it gives a reason and next action.
 
+When `Login Required` appears, the UI shows:
+
+- Open Job Portal
+- Continue After Login
+- Paste JD Manually
+
+The user logs in manually in the job portal tab, then clicks Continue After Login to retry the same job URL.
+
 Extracted fields include:
 
 - job title
@@ -369,6 +377,31 @@ Output includes:
 - unanswered questions found
 
 The user reviews final application fields manually.
+
+## Experience Point Library
+
+Experience points live in:
+
+```text
+experience_points_library/
+```
+
+Folders are role-based:
+
+- `data_engineer`
+- `data_analyst`
+- `business_analyst`
+- `project_manager`
+- `product_manager`
+- `software_engineer`
+- `qa_engineer`
+- `cloud_engineer`
+- `data_governance`
+- `data_migration`
+- `master_data_management`
+- `generic`
+
+After ATS analysis, missing skills are matched against the library. The user must select and approve points with `Allow Selected`; skipped points are not added. Before resume generation, the user must assign each approved point to the real employer/project. The system never assigns employers automatically.
 
 ## Question Bank
 

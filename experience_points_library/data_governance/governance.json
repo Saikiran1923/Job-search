@@ -1,0 +1,10 @@
+{
+  "points": [
+    {
+      "skill": "Data Governance",
+      "category": "Governance",
+      "point": "Documented data ownership, validation rules, and exception handling processes to strengthen governance practices.",
+      "priority": 1
+    }
+  ]
+}

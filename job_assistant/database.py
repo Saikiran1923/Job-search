@@ -372,6 +372,22 @@ class JobAssistantDB:
             if column not in existing:
                 connection.execute(f"ALTER TABLE resume_versions ADD COLUMN {column} {definition}")
 
+        recruiter_columns = {
+            "direct_phone": "TEXT DEFAULT ''",
+            "mobile_number": "TEXT DEFAULT ''",
+            "office_number": "TEXT DEFAULT ''",
+            "last_contact_date": "TEXT DEFAULT ''",
+            "follow_up_date": "TEXT DEFAULT ''",
+            "recruiter_status": "TEXT DEFAULT ''",
+        }
+        existing_recruiter_columns = {
+            row["name"]
+            for row in connection.execute("PRAGMA table_info(recruiters)").fetchall()
+        }
+        for column, definition in recruiter_columns.items():
+            if column not in existing_recruiter_columns:
+                connection.execute(f"ALTER TABLE recruiters ADD COLUMN {column} {definition}")
+
     def create_user(self, name: str, email: str, password: str, role: str = "user") -> dict[str, Any]:
         timestamp = now_iso()
         with self.connect() as connection:
@@ -884,8 +900,12 @@ class JobAssistantDB:
         with self.connect() as connection:
             cursor = connection.execute(
                 """
-                INSERT INTO recruiters (user_id, name, email, phone, company, linkedin, notes, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO recruiters (
+                    user_id, name, email, phone, company, linkedin, notes,
+                    direct_phone, mobile_number, office_number, last_contact_date,
+                    follow_up_date, recruiter_status, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     user_id,
@@ -895,6 +915,12 @@ class JobAssistantDB:
                     data.get("company", "").strip(),
                     data.get("linkedin", "").strip(),
                     data.get("notes", "").strip(),
+                    data.get("direct_phone", "").strip(),
+                    data.get("mobile_number", "").strip(),
+                    data.get("office_number", "").strip(),
+                    data.get("last_contact_date", "").strip(),
+                    data.get("follow_up_date", "").strip(),
+                    data.get("recruiter_status", "").strip(),
                     timestamp,
                     timestamp,
                 ),

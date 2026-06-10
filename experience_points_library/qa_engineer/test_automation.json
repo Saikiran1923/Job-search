@@ -1,0 +1,10 @@
+{
+  "points": [
+    {
+      "skill": "Test Automation",
+      "category": "Quality",
+      "point": "Created automated test coverage that improved regression confidence and reduced repetitive manual validation.",
+      "priority": 1
+    }
+  ]
+}

@@ -101,6 +101,7 @@ nav button.active, nav button:hover { background: var(--surface-2); color: var(-
 }
 .topbar h1 { margin: 0; }
 .session { display: flex; gap: 10px; align-items: center; color: var(--muted); }
+.session input[type="search"] { min-width: 360px; }
 main { padding: 28px; }
 .page { display: none; }
 .page.active { display: grid; gap: 22px; }
@@ -179,6 +180,48 @@ pre {
   border-radius: 16px;
   padding: 14px;
   margin: 10px 0;
+}
+.action-panel,
+.manual-jd-section,
+.experience-skill-block {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: 16px;
+  padding: 16px;
+  margin: 12px 0;
+}
+.experience-point-option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 14px;
+  padding: 12px;
+  margin: 8px 0;
+}
+.experience-point-option input { width: auto; margin-top: 4px; }
+.ats-comparison {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 14px 0;
+}
+.ats-comparison div {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-2);
+  padding: 16px;
+}
+.ats-comparison span { color: var(--muted); font-weight: 800; }
+.ats-comparison strong { display: block; font-size: 30px; margin-top: 6px; }
+.link-button {
+  background: none;
+  color: var(--primary);
+  border: 0;
+  padding: 0;
+  font-weight: 900;
 }
 .portal-row {
   display: grid;

@@ -65,6 +65,7 @@
             <h1 id="pageTitle">Application Command Center</h1>
           </div>
           <div class="session">
+            <input id="globalSearchInput" type="search" placeholder="Search company, recruiter, title, ATS, status, location" />
             <button id="themeBtn" class="ghost">Toggle Theme</button>
             <span id="userLabel"></span>
             <button id="logoutBtn" class="secondary">Logout</button>
@@ -160,13 +161,25 @@
                 <input name="job_url" type="url" placeholder="https://company.com/careers/job-id" />
                 <label>Job Title<input name="job_title" placeholder="Optional if pasting JD manually" /></label>
                 <label>Company<input name="company_name" placeholder="Optional if pasting JD manually" /></label>
-                <label>Paste Job Description Manually<textarea name="manual_jd" rows="8" placeholder="Paste JD if extraction fails or you prefer manual intake."></textarea></label>
-                <label>Upload JD File<input id="jdFileInput" type="file" accept=".txt" /></label>
+                <section id="manualJdSection" class="manual-jd-section">
+                  <h3>Manual Job Description</h3>
+                  <p class="muted">If extraction is blocked, open the job page, copy the job description, paste it below, then click Extract Job Details.</p>
+                  <label>Manual Job Description<textarea name="manual_jd" rows="12" placeholder="Paste the full job description here."></textarea></label>
+                  <label>Upload JD File<input id="jdFileInput" type="file" accept=".txt" /></label>
+                </section>
                 <button type="submit">Extract Job Details</button>
               </form>
+              <div id="loginRequiredPanel" class="action-panel hidden">
+                <h3>Login Required</h3>
+                <p>Login is required to access this job posting.</p>
+                <div class="toolbar">
+                  <button id="openJobPortalBtn" type="button">Open Job Portal</button>
+                  <button id="continueAfterLoginBtn" type="button" class="secondary">Continue After Login</button>
+                  <button id="pasteJdManuallyBtn" type="button" class="secondary">Paste JD Manually</button>
+                </div>
+              </div>
               <div id="pipelineProgress" class="pipeline"></div>
               <pre id="jobExtractOutput"></pre>
-              <label>Manual Job Description<textarea id="manualJobDescription" rows="8" placeholder="Paste full job description here if extraction fails."></textarea></label>
             </div>
           </section>
 
@@ -186,7 +199,9 @@
               <h2>Resume Suggestion Approval</h2>
               <p class="muted">Review each suggestion. Accept, reject, or edit before generating an optimized resume.</p>
               <div id="suggestionsOutput"></div>
+              <div id="experiencePointsOutput"></div>
               <button id="optimizeResumeBtn">Generate Optimized Resume From Accepted Suggestions</button>
+              <div id="atsComparisonOutput"></div>
               <pre id="optimizedResumeOutput"></pre>
             </div>
           </section>
@@ -269,11 +284,18 @@
               <label>Name<input name="name" required /></label>
               <label>Email<input name="email" type="email" /></label>
               <label>Company<input name="company" /></label>
+              <label>Direct Phone<input name="direct_phone" /></label>
+              <label>Mobile Number<input name="mobile_number" /></label>
+              <label>Office Number<input name="office_number" /></label>
               <label>LinkedIn<input name="linkedin" /></label>
+              <label>Last Contact Date<input name="last_contact_date" type="date" /></label>
+              <label>Follow-Up Date<input name="follow_up_date" type="date" /></label>
+              <label>Recruiter Status<input name="recruiter_status" placeholder="Active, follow-up, inactive" /></label>
               <label>Notes<textarea name="notes" rows="3"></textarea></label>
               <button type="submit">Add Recruiter</button>
             </form>
             <div id="recruiters" class="card"></div>
+            <div id="recruiterDetails" class="card"></div>
           </section>
 
           <section data-view="reminders" class="page">
