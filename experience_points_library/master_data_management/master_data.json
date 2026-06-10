@@ -1,0 +1,10 @@
+{
+  "points": [
+    {
+      "skill": "Master Data Management",
+      "category": "MDM",
+      "point": "Maintained master data accuracy by validating attributes, resolving data issues, and supporting governance workflows.",
+      "priority": 1
+    }
+  ]
+}

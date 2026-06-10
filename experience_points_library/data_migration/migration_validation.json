@@ -1,0 +1,10 @@
+{
+  "points": [
+    {
+      "skill": "Data Migration",
+      "category": "Migration",
+      "point": "Validated source-to-target data migration results by reconciling record counts, field mappings, and data quality issues.",
+      "priority": 1
+    }
+  ]
+}

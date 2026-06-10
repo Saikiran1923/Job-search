@@ -378,6 +378,7 @@ class JobAssistantDB:
             "office_number": "TEXT DEFAULT ''",
             "last_contact_date": "TEXT DEFAULT ''",
             "follow_up_date": "TEXT DEFAULT ''",
+            "recruiter_status": "TEXT DEFAULT ''",
         }
         existing_recruiter_columns = {
             row["name"]
@@ -902,9 +903,9 @@ class JobAssistantDB:
                 INSERT INTO recruiters (
                     user_id, name, email, phone, company, linkedin, notes,
                     direct_phone, mobile_number, office_number, last_contact_date,
-                    follow_up_date, created_at, updated_at
+                    follow_up_date, recruiter_status, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     user_id,
@@ -919,6 +920,7 @@ class JobAssistantDB:
                     data.get("office_number", "").strip(),
                     data.get("last_contact_date", "").strip(),
                     data.get("follow_up_date", "").strip(),
+                    data.get("recruiter_status", "").strip(),
                     timestamp,
                     timestamp,
                 ),

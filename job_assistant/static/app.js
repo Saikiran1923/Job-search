@@ -7,11 +7,13 @@ let lastResumeText = "";
 let lastPrediction = null;
 let acceptedSuggestions = [];
 let approvedExperiencePoints = [];
+let assignedExperiencePoints = [];
 let lastInterviewQuestions = [];
 let lastPipeline = null;
 let latestOptimizedResume = "";
 let allApplications = [];
 let allRecruiters = [];
+let allResumes = [];
 
 const authView = document.getElementById("authView");
 const appView = document.getElementById("appView");
@@ -114,14 +116,13 @@ async function refreshProfile() {
 
 async function refreshResumes() {
   const { resumes } = await api("/api/resumes");
+  allResumes = resumes;
   const latest = resumes[0];
   if (latest) {
     lastResumeText = latest.resume_text || lastResumeText;
     document.getElementById("resumePreview").textContent = latest.resume_text || "";
   }
-  document.getElementById("resumeVersions").innerHTML = resumes.map((resume) => `
-    <div class="list-item"><strong>v${resume.version_number}</strong> ${escapeHtml(resume.original_file_name)} | ${escapeHtml(resume.upload_date)}<br>${escapeHtml(resume.linked_company || "")} ${escapeHtml(resume.linked_job || "")}</div>
-  `).join("") || "<p class='muted'>No resumes uploaded.</p>";
+  applyGlobalSearch();
 }
 
 async function refreshPortalSessions() {
@@ -176,6 +177,26 @@ function applyGlobalSearch() {
   });
   renderKanban(filtered);
   renderApplicationTable(filtered);
+  const filteredRecruiters = !query ? allRecruiters : allRecruiters.filter((recruiter) => [
+    recruiter.name,
+    recruiter.company,
+    recruiter.email,
+    recruiter.recruiter_status,
+  ].join(" ").toLowerCase().includes(query));
+  renderRecruiters(filteredRecruiters);
+  const filteredResumes = !query ? allResumes : allResumes.filter((resume) => [
+    resume.original_file_name,
+    resume.linked_company,
+    resume.linked_job,
+    resume.version_number,
+  ].join(" ").toLowerCase().includes(query));
+  renderResumeVersions(filteredResumes);
+}
+
+function renderResumeVersions(resumes) {
+  document.getElementById("resumeVersions").innerHTML = resumes.map((resume) => `
+    <div class="list-item"><strong>v${resume.version_number}</strong> ${escapeHtml(resume.original_file_name)} | ${escapeHtml(resume.upload_date)}<br>${escapeHtml(resume.linked_company || "")} ${escapeHtml(resume.linked_job || "")}</div>
+  `).join("") || "<p class='muted'>No resumes uploaded.</p>";
 }
 
 function renderKanban(applications) {
@@ -236,8 +257,15 @@ function renderQuestions(questions, allowAnswer) {
 async function refreshContacts() {
   const [recruiters, reminders] = await Promise.all([api("/api/recruiters"), api("/api/reminders")]);
   allRecruiters = recruiters.recruiters;
-  document.getElementById("recruiters").innerHTML = recruiters.recruiters.map((item, index) => `<div class="list-item"><button class="link-button" data-recruiter-index="${index}" type="button">${escapeHtml(item.name)}</button><br>${escapeHtml(item.company || "")} ${escapeHtml(item.email || "")}</div>`).join("") || "<p>No recruiters saved.</p>";
+  renderRecruiters(allRecruiters);
   document.getElementById("reminders").innerHTML = reminders.reminders.map((item) => `<div class="list-item"><strong>${escapeHtml(item.title)}</strong><br>${escapeHtml(item.due_at)}</div>`).join("") || "<p>No reminders saved.</p>";
+}
+
+function renderRecruiters(recruiters) {
+  document.getElementById("recruiters").innerHTML = recruiters.map((item) => {
+    const index = allRecruiters.findIndex((recruiter) => recruiter.id === item.id);
+    return `<div class="list-item"><button class="link-button" data-recruiter-index="${index}" type="button">${escapeHtml(item.name)}</button><br>${escapeHtml(item.company || "")} ${escapeHtml(item.email || "")}<br>${escapeHtml(item.recruiter_status || "")}</div>`;
+  }).join("") || "<p>No recruiters saved.</p>";
 }
 
 function renderPrediction(prediction, suggestions) {
@@ -289,14 +317,14 @@ async function renderExperiencePointSuggestions(missingSkills) {
       ${points.length ? points.map((point, index) => `
         <label class="experience-point-option">
           <input type="checkbox" data-experience-point='${escapeAttribute(JSON.stringify({ ...point, type: "experience_point", section_name: "Experience", id: `${skill}-${index}` }))}' />
-          <span><strong>${escapeHtml(point.employer)}</strong><br>${escapeHtml(point.point)}<br><small>${escapeHtml(point.project)} | ${escapeHtml(point.skill)} | Confidence ${escapeHtml(point.confidence_score)}%</small></span>
+          <span>${escapeHtml(point.point)}<br><small>${escapeHtml(point.role_folder)} | ${escapeHtml(point.category)} | ${escapeHtml(point.skill)} | Priority ${escapeHtml(point.priority)}</small></span>
         </label>
       `).join("") : "<p class='muted'>No matching experience points found.</p>"}
     </div>
   `).join("");
   document.getElementById("experiencePointsOutput").innerHTML = `
     <h2>Experience Point Library Matches</h2>
-    <p class="muted">Only approved points can be added. Points stay under their original employer/project.</p>
+    <p class="muted">Only approved points can be added. After approval, you must assign each point to the real employer/project. The system never assigns employers automatically.</p>
     ${blocks}
     <div class="toolbar">
       <button id="allowExperiencePointsBtn" type="button">Allow Selected</button>
@@ -305,11 +333,48 @@ async function renderExperiencePointSuggestions(missingSkills) {
   `;
   document.getElementById("allowExperiencePointsBtn").addEventListener("click", () => {
     approvedExperiencePoints = [...document.querySelectorAll("[data-experience-point]:checked")].map((input) => JSON.parse(input.dataset.experiencePoint));
-    toast(`${approvedExperiencePoints.length} experience point(s) allowed`);
+    assignedExperiencePoints = [];
+    renderEmployerAssignmentStep();
+    toast(`${approvedExperiencePoints.length} experience point(s) allowed. Assign employer/project before resume generation.`);
   });
   document.getElementById("skipExperiencePointsBtn").addEventListener("click", () => {
     approvedExperiencePoints = [];
+    assignedExperiencePoints = [];
+    document.getElementById("employerAssignmentOutput")?.remove();
     toast("Experience points skipped");
+  });
+}
+
+function renderEmployerAssignmentStep() {
+  const existing = document.getElementById("employerAssignmentOutput");
+  if (existing) existing.remove();
+  const container = document.createElement("div");
+  container.id = "employerAssignmentOutput";
+  container.className = "action-panel";
+  container.innerHTML = `
+    <h2>Assign Approved Points to Employer / Project</h2>
+    <p class="muted">User assignment is mandatory. The system never chooses employers automatically, never creates fake experience, and never duplicates points across employers.</p>
+    ${approvedExperiencePoints.map((point, index) => `
+      <div class="assignment-card">
+        <p><strong>Approved Point:</strong> ${escapeHtml(point.point)}</p>
+        <label>Employer<input data-assignment-employer="${index}" placeholder="Employer name" /></label>
+        <label>Project<input data-assignment-project="${index}" placeholder="Project name" /></label>
+      </div>
+    `).join("")}
+    <button id="saveAssignmentsBtn" type="button">Save Assignments</button>
+  `;
+  document.getElementById("experiencePointsOutput").appendChild(container);
+  document.getElementById("saveAssignmentsBtn").addEventListener("click", () => {
+    assignedExperiencePoints = approvedExperiencePoints.map((point, index) => ({
+      ...point,
+      assigned_employer: document.querySelector(`[data-assignment-employer="${index}"]`).value.trim(),
+      assigned_project: document.querySelector(`[data-assignment-project="${index}"]`).value.trim(),
+    })).filter((point) => point.assigned_employer && point.assigned_project);
+    if (assignedExperiencePoints.length !== approvedExperiencePoints.length) {
+      toast("Assign employer and project for every approved point before resume generation.");
+      return;
+    }
+    toast("Employer assignments saved");
   });
 }
 
@@ -491,7 +556,10 @@ document.getElementById("atsPredictForm").addEventListener("submit", async (even
 document.getElementById("optimizeResumeBtn").addEventListener("click", async () => {
   if (!lastResumeText) return toast("Run ATS Analysis first");
   try {
-    const result = await api("/api/resume/optimize", { method: "POST", body: JSON.stringify({ resume_text: lastResumeText, job_details: lastJobDetails || {}, approved_suggestions: [...acceptedSuggestions, ...approvedExperiencePoints] }) });
+    if (approvedExperiencePoints.length && assignedExperiencePoints.length !== approvedExperiencePoints.length) {
+      return toast("Assign employer/project for each approved experience point before generating resume.");
+    }
+    const result = await api("/api/resume/optimize", { method: "POST", body: JSON.stringify({ resume_text: lastResumeText, job_details: lastJobDetails || {}, approved_suggestions: [...acceptedSuggestions, ...assignedExperiencePoints] }) });
     document.getElementById("optimizedResumeOutput").textContent = JSON.stringify({ before: result.before.score, after: result.after.score, improvement: result.improvement_percentage, optimized_resume: result.optimized_resume }, null, 2);
     document.getElementById("atsComparisonOutput").innerHTML = `<div class="ats-comparison"><div><span>ATS Before Score</span><strong>${result.before.score}%</strong></div><div><span>ATS After Score</span><strong>${result.after.score}%</strong></div><div><span>Improvement</span><strong>+${result.improvement_percentage}%</strong></div></div>`;
     latestOptimizedResume = result.optimized_resume;
@@ -553,6 +621,7 @@ document.addEventListener("click", (event) => {
   const button = event.target.closest("[data-recruiter-index]");
   if (!button) return;
   const recruiter = allRecruiters[Number(button.dataset.recruiterIndex)];
+  const linkedApplications = allApplications.filter((app) => (app.company || "").toLowerCase() === (recruiter.company || "").toLowerCase());
   document.getElementById("recruiterDetails").innerHTML = `<h2>${escapeHtml(recruiter.name)}</h2>
     <p><strong>Company:</strong> ${escapeHtml(recruiter.company || "")}</p>
     <p><strong>Email:</strong> ${escapeHtml(recruiter.email || "")}</p>
@@ -562,7 +631,10 @@ document.addEventListener("click", (event) => {
     <p><strong>LinkedIn:</strong> ${escapeHtml(recruiter.linkedin || "")}</p>
     <p><strong>Last Contact Date:</strong> ${escapeHtml(recruiter.last_contact_date || "")}</p>
     <p><strong>Follow-Up Date:</strong> ${escapeHtml(recruiter.follow_up_date || "")}</p>
-    <p><strong>Notes:</strong> ${escapeHtml(recruiter.notes || "")}</p>`;
+    <p><strong>Recruiter Status:</strong> ${escapeHtml(recruiter.recruiter_status || "")}</p>
+    <p><strong>Notes:</strong> ${escapeHtml(recruiter.notes || "")}</p>
+    <h3>Linked Applications</h3>
+    ${linkedApplications.length ? `<ul>${linkedApplications.map((app) => `<li>${escapeHtml(app.company)} - ${escapeHtml(app.title || app.role)} (${escapeHtml(app.status)})</li>`).join("")}</ul>` : "<p>No linked applications found.</p>"}`;
 });
 
 document.getElementById("reminderForm").addEventListener("submit", async (event) => {

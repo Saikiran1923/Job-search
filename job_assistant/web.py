@@ -325,7 +325,7 @@ def create_handler(db: JobAssistantDB) -> type[BaseHTTPRequestHandler]:
             if method == "POST" and path == "/api/experience-points/search":
                 data = _read_json(self)
                 missing_skills = data.get("missing_skills") or []
-                return HTTPStatus.OK, {"matches": search_experience_points([str(skill) for skill in missing_skills])}
+                return HTTPStatus.OK, {"matches": search_experience_points([str(skill) for skill in missing_skills], role=str(data.get("role", "")))}
             if method == "POST" and path == "/api/resume/optimize":
                 data = _read_json(self)
                 _required(data, "resume_text")

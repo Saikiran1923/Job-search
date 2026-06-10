@@ -1,0 +1,16 @@
+{
+  "points": [
+    {
+      "skill": "Cloud Platforms",
+      "category": "Cloud",
+      "point": "Supported cloud-based data workflows by organizing storage, processing, and access patterns for reliable delivery.",
+      "priority": 2
+    },
+    {
+      "skill": "AWS",
+      "category": "Cloud",
+      "point": "Worked with AWS-based data services to support scalable ingestion, storage, and reporting use cases.",
+      "priority": 2
+    }
+  ]
+}

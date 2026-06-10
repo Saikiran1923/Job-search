@@ -1,0 +1,10 @@
+{
+  "points": [
+    {
+      "skill": "Cloud Operations",
+      "category": "Cloud",
+      "point": "Supported cloud operations by monitoring service health, documenting issues, and improving deployment reliability.",
+      "priority": 1
+    }
+  ]
+}

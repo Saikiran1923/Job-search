@@ -386,16 +386,22 @@ Experience points live in:
 experience_points_library/
 ```
 
-Folders are employer/project based:
+Folders are role-based:
 
-- `Topgolf_Callaway`
-- `Jack_Wolfskin`
-- `Tommy_Hilfiger`
-- `Finance_Migration`
-- `Data_Governance`
-- `Generic`
+- `data_engineer`
+- `data_analyst`
+- `business_analyst`
+- `project_manager`
+- `product_manager`
+- `software_engineer`
+- `qa_engineer`
+- `cloud_engineer`
+- `data_governance`
+- `data_migration`
+- `master_data_management`
+- `generic`
 
-After ATS analysis, missing skills are matched against the library. The user must select and approve points with `Allow Selected`; skipped points are not added. Approved points stay under their original employer/project when generating the optimized resume.
+After ATS analysis, missing skills are matched against the library. The user must select and approve points with `Allow Selected`; skipped points are not added. Before resume generation, the user must assign each approved point to the real employer/project. The system never assigns employers automatically.
 
 ## Question Bank
 

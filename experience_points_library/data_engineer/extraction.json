@@ -1,0 +1,16 @@
+{
+  "points": [
+    {
+      "skill": "Data Extraction",
+      "category": "Extraction",
+      "point": "Built and maintained data extraction workflows that collected source data for downstream analytics and reporting.",
+      "priority": 1
+    },
+    {
+      "skill": "Data Integration",
+      "category": "Extraction",
+      "point": "Built and maintained enterprise data integration pipelines that improved downstream analytics and reporting reliability.",
+      "priority": 0
+    }
+  ]
+}

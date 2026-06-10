@@ -1,0 +1,16 @@
+{
+  "points": [
+    {
+      "skill": "Data Transformation",
+      "category": "Transformation",
+      "point": "Developed reusable data transformation logic to standardize source data and improve analytics readiness.",
+      "priority": 1
+    },
+    {
+      "skill": "ETL",
+      "category": "Transformation",
+      "point": "Designed ETL processes that transformed raw data into validated datasets for business reporting.",
+      "priority": 1
+    }
+  ]
+}

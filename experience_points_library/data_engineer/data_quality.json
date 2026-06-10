@@ -1,0 +1,16 @@
+{
+  "points": [
+    {
+      "skill": "Data Quality",
+      "category": "Quality",
+      "point": "Developed automated data validation processes to improve data quality and reduce operational issues.",
+      "priority": 1
+    },
+    {
+      "skill": "Data Validation",
+      "category": "Quality",
+      "point": "Created validation checks to identify missing, duplicate, and inconsistent records before reporting consumption.",
+      "priority": 1
+    }
+  ]
+}

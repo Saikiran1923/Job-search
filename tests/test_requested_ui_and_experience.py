@@ -26,52 +26,87 @@ class RequestedUiAndExperienceTests(unittest.TestCase):
         html = Path("job_assistant/static/index.html").read_text(encoding="utf-8")
 
         self.assertIn("Manual Job Description", html)
-        self.assertIn("If the portal blocks extraction", html)
+        self.assertIn("If extraction is blocked", html)
         self.assertIn("jdFileInput", html)
 
     def test_experience_point_library_lookup(self) -> None:
-        matches = search_experience_points(["SAP IDocs"])
+        matches = search_experience_points(["Data Integration"], role="data_engineer")
 
-        self.assertIn("SAP IDocs", matches)
-        employers = {point["employer"] for point in matches["SAP IDocs"]}
-        self.assertIn("Jack Wolfskin", employers)
-        self.assertIn("Topgolf Callaway", employers)
+        self.assertIn("Data Integration", matches)
+        self.assertTrue(matches["Data Integration"])
+        self.assertEqual(matches["Data Integration"][0]["role_folder"], "data_engineer")
+        self.assertIn("point", matches["Data Integration"][0])
+        self.assertNotIn("employer", matches["Data Integration"][0])
 
     def test_employer_based_placement_grouping(self) -> None:
         points = [
             {
-                "employer": "Jack Wolfskin",
-                "project": "SAP S/4HANA Integration",
-                "skill": "SAP IDocs",
-                "point": "Supported IDocs.",
+                "assigned_employer": "Employer A",
+                "assigned_project": "Project One",
+                "skill": "Data Integration",
+                "point": "Built data integration pipelines.",
             },
             {
-                "employer": "Topgolf Callaway",
-                "project": "Master Data Interface Support",
-                "skill": "SAP IDocs",
-                "point": "Resolved SAP interface failures.",
+                "assigned_employer": "Employer B",
+                "assigned_project": "Project Two",
+                "skill": "Data Quality",
+                "point": "Created validation checks.",
             },
         ]
         grouped = group_points_by_employer(points)
 
-        self.assertIn("Jack Wolfskin", grouped)
-        self.assertIn("Topgolf Callaway", grouped)
-        self.assertNotIn("Supported IDocs.", [item["point"] for item in grouped["Topgolf Callaway"]["Master Data Interface Support"]])
+        self.assertIn("Employer A", grouped)
+        self.assertIn("Employer B", grouped)
+        self.assertNotIn("Built data integration pipelines.", [item["point"] for item in grouped["Employer B"]["Project Two"]])
+
+    def test_allow_skip_and_assignment_workflow_ui_exists(self) -> None:
+        script = Path("job_assistant/static/app.js").read_text(encoding="utf-8")
+
+        self.assertIn("Allow Selected", script)
+        self.assertIn("Skip", script)
+        self.assertIn("renderEmployerAssignmentStep", script)
+        self.assertIn("data-assignment-employer", script)
+        self.assertIn("data-assignment-project", script)
+
+    def test_recruiter_profile_page_fields_exist(self) -> None:
+        html = Path("job_assistant/static/index.html").read_text(encoding="utf-8")
+        script = Path("job_assistant/static/app.js").read_text(encoding="utf-8")
+
+        self.assertIn("Direct Phone", html)
+        self.assertIn("Mobile Number", html)
+        self.assertIn("Office Number", html)
+        self.assertIn("Recruiter Status", html)
+        self.assertIn("recruiterDetails", html)
+        self.assertIn("Linked Applications", script)
+
+    def test_global_search_covers_applications_recruiters_and_resumes(self) -> None:
+        script = Path("job_assistant/static/app.js").read_text(encoding="utf-8")
+
+        self.assertIn("globalSearchInput", Path("job_assistant/static/index.html").read_text(encoding="utf-8"))
+        self.assertIn("allApplications", script)
+        self.assertIn("allRecruiters", script)
+        self.assertIn("allResumes", script)
+        self.assertIn("renderRecruiters(filteredRecruiters)", script)
+        self.assertIn("renderResumeVersions(filteredResumes)", script)
 
     def test_ats_before_after_calculation_with_allowed_points(self) -> None:
         resume = "Summary Data analyst. Skills SQL. Experience supported reporting. Education BS."
         job = {
-            "job_title": "SAP Data Analyst",
-            "full_job_description": "Required SAP IDocs, SQL, data migration, and SAP interface support.",
-            "required_skills": ["sap idocs", "sql", "data migration"],
+            "job_title": "Data Engineer",
+            "full_job_description": "Required Data Integration, SQL, data migration, and data quality support.",
+            "required_skills": ["data integration", "sql", "data migration"],
         }
-        point = search_experience_points(["SAP IDocs"])["SAP IDocs"][0]
+        point = search_experience_points(["Data Integration"], role="data_engineer")["Data Integration"][0]
         before = predict_ats_score(resume, job)
-        optimized = apply_approved_suggestions(resume, [{**point, "type": "experience_point"}])
+        optimized = apply_approved_suggestions(
+            resume,
+            [{**point, "type": "experience_point", "assigned_employer": "Employer A", "assigned_project": "Project One"}],
+        )
         after = predict_ats_score(optimized["optimized_resume"], job)
 
         self.assertGreaterEqual(after["score"], before["score"])
-        self.assertIn(point["employer"], optimized["optimized_resume"])
+        self.assertIn("Employer A", optimized["optimized_resume"])
+        self.assertIn("Project One", optimized["optimized_resume"])
 
 
 if __name__ == "__main__":
