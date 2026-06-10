@@ -1,0 +1,22 @@
+{
+  "answers": [
+    {
+      "question": "Are you legally authorized to work in the United States?",
+      "answer": "Yes",
+      "options": ["Yes", "No"],
+      "keywords": ["authorized", "work authorization", "legally authorized"]
+    },
+    {
+      "question": "Will you now or in the future require sponsorship for employment visa status?",
+      "answer": "No",
+      "options": ["Yes", "No"],
+      "keywords": ["sponsorship", "visa", "employment visa"]
+    },
+    {
+      "question": "Are you willing to work remotely or hybrid as required by the role?",
+      "answer": "Yes",
+      "options": ["Yes", "No"],
+      "keywords": ["remote", "hybrid", "onsite"]
+    }
+  ]
+}

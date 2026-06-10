@@ -1,0 +1,21 @@
+{
+  "role": "Backend Developer",
+  "bullets": [
+    {
+      "text": "Developed REST API endpoints with clear validation, error handling, and maintainable service-layer logic for business workflows.",
+      "keywords": ["rest", "api", "microservices", "validation"]
+    },
+    {
+      "text": "Implemented backend features using SQL-backed persistence, automated tests, Git review workflows, and CI/CD release practices.",
+      "keywords": ["sql", "testing", "git", "ci/cd", "backend"]
+    },
+    {
+      "text": "Improved service reliability by troubleshooting production issues, documenting fixes, and adding observability for critical paths.",
+      "keywords": ["observability", "troubleshooting", "reliability", "prometheus", "grafana"]
+    },
+    {
+      "text": "Collaborated with frontend, QA, and product partners to refine requirements and deliver secure, scalable application behavior.",
+      "keywords": ["agile", "qa", "security", "requirements"]
+    }
+  ]
+}

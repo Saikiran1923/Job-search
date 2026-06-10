@@ -1,0 +1,21 @@
+{
+  "role": "Data Engineer",
+  "bullets": [
+    {
+      "text": "Designed SQL and Python ETL data pipelines that improved ingestion reliability, validation coverage, and downstream reporting readiness.",
+      "keywords": ["sql", "python", "etl", "data pipelines", "data quality"]
+    },
+    {
+      "text": "Built and maintained Airflow ETL workflows with scheduling, monitoring, and documentation to support trusted analytics and operational reporting.",
+      "keywords": ["etl", "airflow", "monitoring", "analytics", "documentation"]
+    },
+    {
+      "text": "Modeled data warehouse-ready datasets and collaborated with analysts to improve metric definitions, lineage, and stakeholder self-service.",
+      "keywords": ["data warehouse", "data modeling", "lineage", "analytics"]
+    },
+    {
+      "text": "Optimized Spark batch processing patterns for scalable data transformation using AWS cloud storage and distributed processing concepts.",
+      "keywords": ["spark", "aws", "azure", "databricks", "data lake"]
+    }
+  ]
+}

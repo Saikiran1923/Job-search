@@ -1,0 +1,21 @@
+{
+  "role": "Azure Data Engineer",
+  "bullets": [
+    {
+      "text": "Delivered Azure-focused data solutions using SQL, Python, cloud storage, and repeatable ETL patterns for analytics consumers.",
+      "keywords": ["azure", "sql", "python", "etl", "data lake"]
+    },
+    {
+      "text": "Supported data warehouse and lakehouse workloads by validating transformations, documenting lineage, and improving data quality checks.",
+      "keywords": ["data warehouse", "databricks", "data lake", "data quality", "lineage"]
+    },
+    {
+      "text": "Partnered with business teams to translate reporting needs into curated datasets, metric definitions, and reliable refresh processes.",
+      "keywords": ["power bi", "analytics", "requirements", "reporting"]
+    },
+    {
+      "text": "Applied CI/CD and Git-based review practices to keep data pipeline changes traceable, testable, and release-ready.",
+      "keywords": ["ci/cd", "git", "testing", "devops"]
+    }
+  ]
+}

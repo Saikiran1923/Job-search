@@ -1,0 +1,21 @@
+{
+  "role": "QA Engineer",
+  "bullets": [
+    {
+      "text": "Designed test cases from acceptance criteria and validated functional, regression, and integration behavior across releases.",
+      "keywords": ["qa", "testing", "acceptance criteria", "regression"]
+    },
+    {
+      "text": "Automated repeatable checks using test frameworks and CI workflows to reduce manual validation effort and improve release confidence.",
+      "keywords": ["test automation", "selenium", "playwright", "cypress", "ci/cd"]
+    },
+    {
+      "text": "Collaborated with developers and product owners to reproduce defects, clarify expected behavior, and verify fixes.",
+      "keywords": ["jira", "agile", "defects", "verification"]
+    },
+    {
+      "text": "Documented test evidence, risks, and coverage gaps so teams could make informed release decisions.",
+      "keywords": ["documentation", "coverage", "release", "risk"]
+    }
+  ]
+}

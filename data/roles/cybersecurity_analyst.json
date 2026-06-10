@@ -1,0 +1,21 @@
+{
+  "role": "Cybersecurity Analyst",
+  "bullets": [
+    {
+      "text": "Assessed security alerts and documented investigation steps, impact, containment actions, and follow-up recommendations.",
+      "keywords": ["cybersecurity", "siem", "soc", "splunk", "incident response"]
+    },
+    {
+      "text": "Supported vulnerability management by tracking findings, prioritizing remediation, and communicating risk to technical owners.",
+      "keywords": ["vulnerability management", "risk", "remediation", "security"]
+    },
+    {
+      "text": "Reviewed access patterns and identity controls to help teams apply least-privilege practices across systems and applications.",
+      "keywords": ["iam", "oauth", "saml", "least privilege"]
+    },
+    {
+      "text": "Improved security documentation and operational playbooks to make recurring triage and response activities more consistent.",
+      "keywords": ["documentation", "playbooks", "triage", "operations"]
+    }
+  ]
+}
