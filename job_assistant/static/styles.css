@@ -159,6 +159,13 @@ pre {
   white-space: pre-wrap;
   overflow: auto;
 }
+.pdf-preview {
+  width: 100%;
+  min-height: 720px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-2);
+}
 .workflow { display: grid; gap: 10px; }
 .metric-row, .bar-row {
   display: grid;
@@ -256,6 +263,7 @@ pre {
 .pipeline-step.completed { border-color: var(--success); }
 .pipeline-step.failed { border-color: var(--danger); }
 .pipeline-step.login-required { border-color: var(--warning); }
+.pipeline-step.page-accessible { border-color: var(--success); }
 .pipeline-step.job-active { border-color: var(--success); }
 .pipeline-step.job-closed-filled { border-color: var(--danger); }
 .pipeline-step.jd-extraction-incomplete,

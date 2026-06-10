@@ -151,6 +151,12 @@ JSON upload format:
 
 Supported file extensions: PDF, DOCX, TXT. TXT parsing is exact; PDF/DOCX parsing is best effort without extra dependencies.
 
+Preview rules:
+
+- TXT returns text preview.
+- DOCX returns readable extracted text and must not expose raw ZIP/XML internals.
+- PDF should be rendered by the browser PDF viewer; backend text extraction is only for ATS support.
+
 ### Portal Sessions
 
 ```http
@@ -185,6 +191,7 @@ Supported intake statuses:
 
 ```text
 Login Required
+Page Accessible
 Job Active
 Job Closed/Filled
 JD Extraction Incomplete
@@ -195,6 +202,12 @@ If login is detected:
 
 ```text
 Login required. Please login manually and click Continue.
+```
+
+After manual login, `Continue After Login` retries the same `job_url` with `continue_after_login=true`. If extraction succeeds, the response status is:
+
+```text
+Page Accessible
 ```
 
 If the job is closed, filled, expired, or unavailable:

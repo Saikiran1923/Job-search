@@ -230,6 +230,13 @@ def create_handler(db: JobAssistantDB) -> type[BaseHTTPRequestHandler]:
                     job_title=data.get("job_title", ""),
                     company_name=data.get("company_name", ""),
                 )
+                if extracted.get("success") and data.get("continue_after_login"):
+                    extracted = {
+                        **extracted,
+                        "intake_status": "Page Accessible",
+                        "message": "Page Accessible. Continuing workflow.",
+                        "next_action": "Continue ATS workflow automatically.",
+                    }
                 if extracted.get("success"):
                     valid, validation_error = validate_job_details(extracted)
                     if not valid:

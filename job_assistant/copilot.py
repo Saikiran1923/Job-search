@@ -17,6 +17,7 @@ from .job_extractor import (
     LOGIN_REQUIRED,
     LOGIN_REQUIRED_MESSAGE,
     MANUAL_JD_REQUIRED,
+    PAGE_ACCESSIBLE,
     extract_job_from_url,
 )
 from .portal_sessions import detect_portal
