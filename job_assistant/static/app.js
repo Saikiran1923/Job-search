@@ -14,6 +14,8 @@ let latestOptimizedResume = "";
 let allApplications = [];
 let allRecruiters = [];
 let allResumes = [];
+let continueAfterLoginRetry = false;
+let resumePdfObjectUrl = "";
 
 const authView = document.getElementById("authView");
 const appView = document.getElementById("appView");
@@ -120,9 +122,31 @@ async function refreshResumes() {
   const latest = resumes[0];
   if (latest) {
     lastResumeText = latest.resume_text || lastResumeText;
-    document.getElementById("resumePreview").textContent = latest.resume_text || "";
+    showResumeTextPreview(latest.resume_text || "");
   }
   applyGlobalSearch();
+}
+
+function showResumeTextPreview(text) {
+  document.getElementById("resumePdfPreview").classList.add("hidden");
+  document.getElementById("resumeTextPreview").classList.remove("hidden");
+  document.getElementById("resumeTextPreview").textContent = text || "";
+}
+
+function showResumePdfPreview(file) {
+  if (resumePdfObjectUrl) URL.revokeObjectURL(resumePdfObjectUrl);
+  resumePdfObjectUrl = URL.createObjectURL(file);
+  document.getElementById("resumeTextPreview").classList.add("hidden");
+  const frame = document.getElementById("resumePdfPreview");
+  frame.src = resumePdfObjectUrl;
+  frame.classList.remove("hidden");
+}
+
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+  return btoa(binary);
 }
 
 async function refreshPortalSessions() {
@@ -455,19 +479,28 @@ document.getElementById("resumeUploadForm").addEventListener("submit", async (ev
   event.preventDefault();
   const file = event.target.elements.resume_file.files[0];
   if (!file) return toast("Choose a resume file");
-  const content_text = await file.text();
+  const extension = file.name.toLowerCase().split(".").pop();
+  const payload = {
+    file_name: file.name,
+    linked_company: event.target.elements.linked_company.value,
+    linked_job: event.target.elements.linked_job.value,
+  };
+  if (extension === "txt") {
+    payload.content_text = await file.text();
+  } else {
+    payload.content_base64 = arrayBufferToBase64(await file.arrayBuffer());
+  }
   try {
     const result = await api("/api/resumes/upload", {
       method: "POST",
-      body: JSON.stringify({
-        file_name: file.name,
-        content_text,
-        linked_company: event.target.elements.linked_company.value,
-        linked_job: event.target.elements.linked_job.value,
-      }),
+      body: JSON.stringify(payload),
     });
     lastResumeText = result.resume.resume_text;
-    document.getElementById("resumePreview").textContent = result.resume.resume_text;
+    if (extension === "pdf") {
+      showResumePdfPreview(file);
+    } else {
+      showResumeTextPreview(result.resume.resume_text);
+    }
     event.target.reset();
     await refreshResumes();
     toast("Resume uploaded");
@@ -491,6 +524,8 @@ document.getElementById("jobExtractForm").addEventListener("submit", async (even
     const payload = formData(event.target);
     const jdFile = document.getElementById("jdFileInput").files[0];
     if (jdFile) payload.manual_jd = await jdFile.text();
+    if (continueAfterLoginRetry) payload.continue_after_login = true;
+    continueAfterLoginRetry = false;
     const { job_details } = await api("/api/job-intake/extract", { method: "POST", body: JSON.stringify(payload) });
     lastJobDetails = job_details;
     document.getElementById("jobExtractOutput").textContent = JSON.stringify(job_details, null, 2);
@@ -530,6 +565,7 @@ document.getElementById("openJobPortalBtn").addEventListener("click", () => {
 });
 
 document.getElementById("continueAfterLoginBtn").addEventListener("click", () => {
+  continueAfterLoginRetry = true;
   document.getElementById("jobExtractForm").requestSubmit();
 });
 

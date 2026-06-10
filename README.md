@@ -308,6 +308,7 @@ Unable to extract full JD from page. Please paste JD manually or upload JD file.
 Job intake statuses:
 
 - `Login Required` — shows `Login required. Please login manually and click Continue.`
+- `Page Accessible` — shown after Continue After Login successfully reaches the job page.
 - `Job Active` — extraction succeeded and ATS workflow can continue.
 - `Job Closed/Filled` — shows `This job appears to be closed or filled.`
 - `JD Extraction Incomplete` — asks the user to paste JD manually or upload a JD file.
@@ -322,6 +323,12 @@ When `Login Required` appears, the UI shows:
 - Paste JD Manually
 
 The user logs in manually in the job portal tab, then clicks Continue After Login to retry the same job URL.
+
+Resume preview behavior:
+
+- TXT files preview as text.
+- DOCX files are parsed into readable text and never show raw ZIP/XML internals like `PK`, `[Content_Types].xml`, or `word/document.xml`.
+- PDF files preview in the browser PDF viewer instead of showing raw binary text.
 
 Extracted fields include:
 

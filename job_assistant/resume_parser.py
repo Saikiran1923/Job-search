@@ -43,7 +43,15 @@ def parse_resume_upload(file_name: str, content_text: str = "", content_base64: 
     text = re.sub(r"\n{3,}", "\n\n", text).strip()
     if not text:
         raise ValueError("Unable to parse resume text from uploaded file")
-    return {"file_type": extension.removeprefix(".").upper(), "resume_text": text}
+    if extension == ".pdf" and _looks_like_raw_office_or_pdf(text):
+        text = "PDF preview available. Text extraction was not available; paste resume text manually for ATS analysis."
+    elif _looks_like_raw_office_or_pdf(text):
+        raise ValueError("Unable to render readable resume preview from uploaded file")
+    return {
+        "file_type": extension.removeprefix(".").upper(),
+        "resume_text": text,
+        "preview_type": "pdf" if extension == ".pdf" else "text",
+    }
 
 
 def _parse_docx(raw: bytes) -> str:
@@ -51,6 +59,8 @@ def _parse_docx(raw: bytes) -> str:
         with zipfile.ZipFile(BytesIO(raw)) as archive:
             xml = archive.read("word/document.xml").decode("utf-8", errors="ignore")
     except Exception:
+        if raw.startswith(b"PK"):
+            raise ValueError("Unable to parse DOCX document text")
         return raw.decode("utf-8", errors="ignore")
     text = re.sub(r"<[^>]+>", " ", xml)
     return re.sub(r"\s+", " ", text)
@@ -63,3 +73,8 @@ def _parse_pdf_best_effort(raw: bytes) -> str:
     if chunks:
         return "\n".join(chunks)
     return re.sub(r"[^A-Za-z0-9@.,;:/$%#&+()\-_\s]", " ", text)
+
+
+def _looks_like_raw_office_or_pdf(text: str) -> bool:
+    indicators = ["[Content_Types].xml", "word/document.xml", "_rels/.rels", "PK\x03", "%PDF-"]
+    return any(indicator in text for indicator in indicators)

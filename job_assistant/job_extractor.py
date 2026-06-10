@@ -19,6 +19,7 @@ JOB_CLOSED_MESSAGE = "This job appears to be closed or filled."
 JD_INCOMPLETE_MESSAGE = "Unable to extract full JD from page. Please paste JD manually or upload JD file."
 
 LOGIN_REQUIRED = "Login Required"
+PAGE_ACCESSIBLE = "Page Accessible"
 JOB_ACTIVE = "Job Active"
 JOB_CLOSED = "Job Closed/Filled"
 JD_INCOMPLETE = "JD Extraction Incomplete"
@@ -261,6 +262,7 @@ def _result(
 ) -> dict[str, object]:
     next_actions = {
         LOGIN_REQUIRED: "Log in manually in the browser session, then click Continue.",
+        PAGE_ACCESSIBLE: "Continue ATS workflow automatically.",
         JOB_CLOSED: "Stop ATS workflow unless you manually paste a valid JD.",
         JD_INCOMPLETE: "Paste the JD manually or upload a JD file.",
         MANUAL_JD_REQUIRED: "Paste the JD manually or upload a JD file.",
