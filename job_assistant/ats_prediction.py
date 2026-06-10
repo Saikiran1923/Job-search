@@ -7,6 +7,7 @@ from typing import Any
 import re
 
 from .keywords import extract_known_skills, important_terms, normalize_text
+from .experience_library import render_employer_placed_points
 
 
 @dataclass
@@ -257,13 +258,21 @@ def apply_approved_suggestions(
 
     optimized = resume_text.rstrip()
     keywords_added: list[str] = []
+    approved_experience_points: list[dict[str, Any]] = []
     for suggestion in approved_suggestions:
+        if suggestion.get("type") == "experience_point":
+            approved_experience_points.append(suggestion)
+            keywords_added.append(str(suggestion.get("skill", "")))
+            continue
         section = str(suggestion.get("section_name", "Resume")).strip() or "Resume"
         suggested_text = str(suggestion.get("suggested_text", "")).strip()
         if not suggested_text:
             continue
         optimized += f"\n\n## Approved {section} Update\n{suggested_text}"
         keywords_added.extend(str(item) for item in suggestion.get("keywords_added", []))
+    placed = render_employer_placed_points(approved_experience_points)
+    if placed:
+        optimized += f"\n\n## Approved Experience Points By Employer\n{placed}"
     return {
         "optimized_resume": optimized.strip() + "\n",
         "keywords_added": sorted(set(keyword.lower() for keyword in keywords_added if keyword)),

@@ -1,0 +1,21 @@
+{
+  "skill": "Data Migration",
+  "points": [
+    {
+      "employer": "Finance Migration",
+      "project": "Legacy-to-Cloud Migration",
+      "role": "Data Migration Analyst",
+      "skill": "Data Migration",
+      "point": "Executed data migration validation by reconciling source-to-target records, documenting defects, and supporting cutover readiness.",
+      "confidence_score": 93
+    },
+    {
+      "employer": "Finance Migration",
+      "project": "ERP Finance Migration",
+      "role": "Data Migration Analyst",
+      "skill": "Data Migration",
+      "point": "Created mapping and validation checks to improve migration accuracy across finance master and transactional datasets.",
+      "confidence_score": 89
+    }
+  ]
+}

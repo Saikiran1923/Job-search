@@ -16,6 +16,7 @@ from .ats_prediction import analyze_resume_workflow, apply_approved_suggestions,
 from .autofill import build_application_assist, build_autofill_draft
 from .copilot import complete_resume_approval, extract_or_manual_job, run_manual_pipeline, validate_job_details
 from .database import DEFAULT_DB_PATH, JobAssistantDB
+from .experience_library import search_experience_points
 from .interview import evaluate_answer, generate_interview_prep, generate_interview_questions
 from .job_extractor import extract_job_from_url
 from .keywords import ROLE_CATALOG
@@ -321,6 +322,10 @@ def create_handler(db: JobAssistantDB) -> type[BaseHTTPRequestHandler]:
                 suggestions = analyze_resume_workflow(data["resume_text"], job_details)["suggestions"]
                 db.audit(user["id"], "predict", "ats", None, {"score": prediction["score"]})
                 return HTTPStatus.OK, {"prediction": prediction, "suggestions": suggestions}
+            if method == "POST" and path == "/api/experience-points/search":
+                data = _read_json(self)
+                missing_skills = data.get("missing_skills") or []
+                return HTTPStatus.OK, {"matches": search_experience_points([str(skill) for skill in missing_skills])}
             if method == "POST" and path == "/api/resume/optimize":
                 data = _read_json(self)
                 _required(data, "resume_text")

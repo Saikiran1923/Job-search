@@ -1,0 +1,13 @@
+{
+  "skill": "Project Management",
+  "points": [
+    {
+      "employer": "Generic",
+      "project": "Cross-Functional Delivery",
+      "role": "Project Contributor",
+      "skill": "Project Management",
+      "point": "Led cross-functional teams to coordinate project activities and deliver milestones on schedule.",
+      "confidence_score": 80
+    }
+  ]
+}

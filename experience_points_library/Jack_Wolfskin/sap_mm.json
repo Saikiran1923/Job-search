@@ -1,0 +1,13 @@
+{
+  "skill": "SAP MM",
+  "points": [
+    {
+      "employer": "Jack Wolfskin",
+      "project": "Material Master Optimization",
+      "role": "SAP Data Analyst",
+      "skill": "SAP MM",
+      "point": "Validated SAP MM material master fields, purchasing views, and data dependencies to support accurate downstream processing.",
+      "confidence_score": 89
+    }
+  ]
+}

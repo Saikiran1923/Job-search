@@ -1,0 +1,13 @@
+{
+  "skill": "SAP MDG",
+  "points": [
+    {
+      "employer": "Topgolf Callaway",
+      "project": "Master Data Governance",
+      "role": "SAP Data Analyst",
+      "skill": "SAP MDG",
+      "point": "Supported SAP MDG workflows by validating master data change requests, governance rules, and approval readiness.",
+      "confidence_score": 91
+    }
+  ]
+}

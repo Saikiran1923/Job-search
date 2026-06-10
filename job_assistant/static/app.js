@@ -6,9 +6,12 @@ let lastJobDetails = null;
 let lastResumeText = "";
 let lastPrediction = null;
 let acceptedSuggestions = [];
+let approvedExperiencePoints = [];
 let lastInterviewQuestions = [];
 let lastPipeline = null;
 let latestOptimizedResume = "";
+let allApplications = [];
+let allRecruiters = [];
 
 const authView = document.getElementById("authView");
 const appView = document.getElementById("appView");
@@ -151,8 +154,28 @@ function renderBars(values) {
 
 async function refreshApplications() {
   const { applications } = await api("/api/applications");
-  renderKanban(applications);
-  renderApplicationTable(applications);
+  allApplications = applications;
+  applyGlobalSearch();
+}
+
+function applyGlobalSearch() {
+  const query = (document.getElementById("globalSearchInput")?.value || "").toLowerCase().trim();
+  const filtered = !query ? allApplications : allApplications.filter((app) => {
+    const haystack = [
+      app.company,
+      app.recruiter_name,
+      app.title,
+      app.role,
+      app.original_ats_score,
+      app.optimized_ats_score,
+      app.ats_improvement,
+      app.status,
+      app.location,
+    ].join(" ").toLowerCase();
+    return haystack.includes(query);
+  });
+  renderKanban(filtered);
+  renderApplicationTable(filtered);
 }
 
 function renderKanban(applications) {
@@ -212,7 +235,8 @@ function renderQuestions(questions, allowAnswer) {
 
 async function refreshContacts() {
   const [recruiters, reminders] = await Promise.all([api("/api/recruiters"), api("/api/reminders")]);
-  document.getElementById("recruiters").innerHTML = recruiters.recruiters.map((item) => `<div class="list-item"><strong>${escapeHtml(item.name)}</strong><br>${escapeHtml(item.company || "")} ${escapeHtml(item.email || "")}</div>`).join("") || "<p>No recruiters saved.</p>";
+  allRecruiters = recruiters.recruiters;
+  document.getElementById("recruiters").innerHTML = recruiters.recruiters.map((item, index) => `<div class="list-item"><button class="link-button" data-recruiter-index="${index}" type="button">${escapeHtml(item.name)}</button><br>${escapeHtml(item.company || "")} ${escapeHtml(item.email || "")}</div>`).join("") || "<p>No recruiters saved.</p>";
   document.getElementById("reminders").innerHTML = reminders.reminders.map((item) => `<div class="list-item"><strong>${escapeHtml(item.title)}</strong><br>${escapeHtml(item.due_at)}</div>`).join("") || "<p>No reminders saved.</p>";
 }
 
@@ -253,6 +277,42 @@ function renderSuggestions(suggestions) {
   }));
 }
 
+async function renderExperiencePointSuggestions(missingSkills) {
+  if (!missingSkills || !missingSkills.length) {
+    document.getElementById("experiencePointsOutput").innerHTML = "<p class='muted'>No missing skills found for experience library lookup.</p>";
+    return;
+  }
+  const result = await api("/api/experience-points/search", { method: "POST", body: JSON.stringify({ missing_skills: missingSkills }) });
+  const blocks = Object.entries(result.matches).map(([skill, points]) => `
+    <div class="experience-skill-block">
+      <h3>Missing Skill: ${escapeHtml(skill)}</h3>
+      ${points.length ? points.map((point, index) => `
+        <label class="experience-point-option">
+          <input type="checkbox" data-experience-point='${escapeAttribute(JSON.stringify({ ...point, type: "experience_point", section_name: "Experience", id: `${skill}-${index}` }))}' />
+          <span><strong>${escapeHtml(point.employer)}</strong><br>${escapeHtml(point.point)}<br><small>${escapeHtml(point.project)} | ${escapeHtml(point.skill)} | Confidence ${escapeHtml(point.confidence_score)}%</small></span>
+        </label>
+      `).join("") : "<p class='muted'>No matching experience points found.</p>"}
+    </div>
+  `).join("");
+  document.getElementById("experiencePointsOutput").innerHTML = `
+    <h2>Experience Point Library Matches</h2>
+    <p class="muted">Only approved points can be added. Points stay under their original employer/project.</p>
+    ${blocks}
+    <div class="toolbar">
+      <button id="allowExperiencePointsBtn" type="button">Allow Selected</button>
+      <button id="skipExperiencePointsBtn" class="secondary" type="button">Skip</button>
+    </div>
+  `;
+  document.getElementById("allowExperiencePointsBtn").addEventListener("click", () => {
+    approvedExperiencePoints = [...document.querySelectorAll("[data-experience-point]:checked")].map((input) => JSON.parse(input.dataset.experiencePoint));
+    toast(`${approvedExperiencePoints.length} experience point(s) allowed`);
+  });
+  document.getElementById("skipExperiencePointsBtn").addEventListener("click", () => {
+    approvedExperiencePoints = [];
+    toast("Experience points skipped");
+  });
+}
+
 function renderInterviewPrep(groups) {
   lastInterviewQuestions = [...groups.level_1, ...groups.level_2];
   document.getElementById("interviewPrepOutput").innerHTML = ["level_1", "level_2"].map((level) => `
@@ -279,6 +339,8 @@ function escapeAttribute(value) {
 }
 
 document.querySelectorAll("#nav button").forEach((button) => button.addEventListener("click", () => switchPage(button.dataset.page)));
+
+document.getElementById("globalSearchInput").addEventListener("input", applyGlobalSearch);
 
 document.getElementById("themeBtn").addEventListener("click", () => document.body.classList.toggle("light"));
 
@@ -367,8 +429,8 @@ document.getElementById("jobExtractForm").addEventListener("submit", async (even
     const { job_details } = await api("/api/job-intake/extract", { method: "POST", body: JSON.stringify(payload) });
     lastJobDetails = job_details;
     document.getElementById("jobExtractOutput").textContent = JSON.stringify(job_details, null, 2);
-    if (job_details.full_job_description) document.getElementById("manualJobDescription").value = job_details.full_job_description;
     toast(job_details.message || job_details.intake_status || "Job intake complete");
+    document.getElementById("loginRequiredPanel").classList.toggle("hidden", job_details.intake_status !== "Login Required");
     if (document.getElementById("autoRunWorkflow").checked && job_details.success) {
       renderPipeline({ "Extract Job Details": job_details.intake_status || "Job Active", "Validate JD": "Running" });
       const pipelineResult = await api("/api/copilot/run", {
@@ -377,7 +439,11 @@ document.getElementById("jobExtractForm").addEventListener("submit", async (even
       });
       lastPipeline = pipelineResult.pipeline;
       renderPipeline(lastPipeline.statuses);
-      if (lastPipeline.suggestions) renderSuggestions(lastPipeline.suggestions);
+      if (lastPipeline.suggestions) {
+        renderSuggestions(lastPipeline.suggestions);
+        const missingFromSuggestions = [...new Set(lastPipeline.suggestions.flatMap((item) => item.keywords_added || []))];
+        await renderExperiencePointSuggestions(missingFromSuggestions);
+      }
       if (lastPipeline.application_assist) {
         document.getElementById("autofillOutput").textContent = JSON.stringify(lastPipeline.application_assist, null, 2);
       }
@@ -392,6 +458,22 @@ document.getElementById("jobExtractForm").addEventListener("submit", async (even
   } catch (error) { toast(error.message); }
 });
 
+document.getElementById("openJobPortalBtn").addEventListener("click", () => {
+  const url = lastJobDetails?.job_url || document.querySelector("#jobExtractForm input[name='job_url']").value;
+  if (!url) return toast("No job URL available");
+  window.open(url, "_blank", "noopener,noreferrer");
+});
+
+document.getElementById("continueAfterLoginBtn").addEventListener("click", () => {
+  document.getElementById("jobExtractForm").requestSubmit();
+});
+
+document.getElementById("pasteJdManuallyBtn").addEventListener("click", () => {
+  document.getElementById("manualJdSection").scrollIntoView({ behavior: "smooth", block: "start" });
+  const textarea = document.querySelector("#jobExtractForm textarea[name='manual_jd']");
+  if (textarea) textarea.focus();
+});
+
 document.getElementById("atsPredictForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const data = formData(event.target);
@@ -401,6 +483,7 @@ document.getElementById("atsPredictForm").addEventListener("submit", async (even
     const result = await api("/api/ats/predict", { method: "POST", body: JSON.stringify({ resume_text: data.resume_text, job_details: jobDetails }) });
     lastPrediction = result.prediction;
     renderPrediction(result.prediction, result.suggestions);
+    await renderExperiencePointSuggestions(result.prediction.missing_keywords);
     switchPage("resume-optimizer");
   } catch (error) { toast(error.message); }
 });
@@ -408,8 +491,9 @@ document.getElementById("atsPredictForm").addEventListener("submit", async (even
 document.getElementById("optimizeResumeBtn").addEventListener("click", async () => {
   if (!lastResumeText) return toast("Run ATS Analysis first");
   try {
-    const result = await api("/api/resume/optimize", { method: "POST", body: JSON.stringify({ resume_text: lastResumeText, job_details: lastJobDetails || {}, approved_suggestions: acceptedSuggestions }) });
+    const result = await api("/api/resume/optimize", { method: "POST", body: JSON.stringify({ resume_text: lastResumeText, job_details: lastJobDetails || {}, approved_suggestions: [...acceptedSuggestions, ...approvedExperiencePoints] }) });
     document.getElementById("optimizedResumeOutput").textContent = JSON.stringify({ before: result.before.score, after: result.after.score, improvement: result.improvement_percentage, optimized_resume: result.optimized_resume }, null, 2);
+    document.getElementById("atsComparisonOutput").innerHTML = `<div class="ats-comparison"><div><span>ATS Before Score</span><strong>${result.before.score}%</strong></div><div><span>ATS After Score</span><strong>${result.after.score}%</strong></div><div><span>Improvement</span><strong>+${result.improvement_percentage}%</strong></div></div>`;
     latestOptimizedResume = result.optimized_resume;
     await refreshAnalytics();
     await refreshResumes();
@@ -463,6 +547,22 @@ document.getElementById("applicationForm").addEventListener("submit", async (eve
 document.getElementById("recruiterForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   try { await api("/api/recruiters", { method: "POST", body: JSON.stringify(formData(event.target)) }); event.target.reset(); await refreshContacts(); toast("Recruiter saved"); } catch (error) { toast(error.message); }
+});
+
+document.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-recruiter-index]");
+  if (!button) return;
+  const recruiter = allRecruiters[Number(button.dataset.recruiterIndex)];
+  document.getElementById("recruiterDetails").innerHTML = `<h2>${escapeHtml(recruiter.name)}</h2>
+    <p><strong>Company:</strong> ${escapeHtml(recruiter.company || "")}</p>
+    <p><strong>Email:</strong> ${escapeHtml(recruiter.email || "")}</p>
+    <p><strong>Direct Phone:</strong> ${escapeHtml(recruiter.direct_phone || "")}</p>
+    <p><strong>Mobile Number:</strong> ${escapeHtml(recruiter.mobile_number || "")}</p>
+    <p><strong>Office Number:</strong> ${escapeHtml(recruiter.office_number || "")}</p>
+    <p><strong>LinkedIn:</strong> ${escapeHtml(recruiter.linkedin || "")}</p>
+    <p><strong>Last Contact Date:</strong> ${escapeHtml(recruiter.last_contact_date || "")}</p>
+    <p><strong>Follow-Up Date:</strong> ${escapeHtml(recruiter.follow_up_date || "")}</p>
+    <p><strong>Notes:</strong> ${escapeHtml(recruiter.notes || "")}</p>`;
 });
 
 document.getElementById("reminderForm").addEventListener("submit", async (event) => {
