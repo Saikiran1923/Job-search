@@ -14,6 +14,15 @@ import re
 FALLBACK_MESSAGE = (
     "Unable to extract full job details from URL. Please paste the job description manually."
 )
+LOGIN_REQUIRED_MESSAGE = "Login required. Please login manually and click Continue."
+JOB_CLOSED_MESSAGE = "This job appears to be closed or filled."
+JD_INCOMPLETE_MESSAGE = "Unable to extract full JD from page. Please paste JD manually or upload JD file."
+
+LOGIN_REQUIRED = "Login Required"
+JOB_ACTIVE = "Job Active"
+JOB_CLOSED = "Job Closed/Filled"
+JD_INCOMPLETE = "JD Extraction Incomplete"
+MANUAL_JD_REQUIRED = "Manual JD Required"
 
 
 @dataclass
@@ -211,6 +220,63 @@ def _blocked(html: str, text: str) -> bool:
     return any(indicator in lowered for indicator in indicators)
 
 
+def _login_required(html: str, text: str) -> bool:
+    lowered = f"{html[:4000]} {text[:4000]}".lower()
+    indicators = [
+        "sign in",
+        "login",
+        "log in",
+        "forgot password",
+        "join now",
+        "create account",
+        "authentication required",
+    ]
+    return any(indicator in lowered for indicator in indicators)
+
+
+def _job_closed(text: str) -> bool:
+    lowered = text.lower()
+    indicators = [
+        "the job you are trying to apply for has been filled",
+        "job you are trying to apply for has been filled",
+        "this job has been filled",
+        "this job is no longer available",
+        "job is no longer available",
+        "position has been filled",
+        "position is closed",
+        "job has expired",
+        "posting has expired",
+        "no longer accepting applications",
+        "not accepting applications",
+    ]
+    return any(indicator in lowered for indicator in indicators)
+
+
+def _result(
+    url: str,
+    status: str,
+    message: str,
+    success: bool = False,
+    **extra: object,
+) -> dict[str, object]:
+    next_actions = {
+        LOGIN_REQUIRED: "Log in manually in the browser session, then click Continue.",
+        JOB_CLOSED: "Stop ATS workflow unless you manually paste a valid JD.",
+        JD_INCOMPLETE: "Paste the JD manually or upload a JD file.",
+        MANUAL_JD_REQUIRED: "Paste the JD manually or upload a JD file.",
+        JOB_ACTIVE: "Continue ATS workflow automatically.",
+    }
+    return {
+        "success": success,
+        "intake_status": status,
+        "message": message,
+        "next_action": next_actions.get(status, ""),
+        "job_url": url,
+        "source": _source(url),
+        **extra,
+    }
+
+
 def extract_job_from_url(
     url: str,
     fetcher: Callable[[str], str] | None = None,
@@ -227,15 +293,14 @@ def extract_job_from_url(
         parser = _ReadableHTMLParser()
         parser.feed(html)
         text = parser.text()
+        if _login_required(html, text):
+            return _result(url, LOGIN_REQUIRED, LOGIN_REQUIRED_MESSAGE)
+        if _job_closed(text):
+            return _result(url, JOB_CLOSED, JOB_CLOSED_MESSAGE)
         if len(text) < 150 or _blocked(html, text):
-            raise ValueError("Page requires login, CAPTCHA, JavaScript, or blocks extraction")
+            return _result(url, JD_INCOMPLETE, JD_INCOMPLETE_MESSAGE)
     except Exception:
-        return {
-            "success": False,
-            "message": FALLBACK_MESSAGE,
-            "job_url": url,
-            "source": _source(url),
-        }
+        return _result(url, JD_INCOMPLETE, JD_INCOMPLETE_MESSAGE)
 
     title = _title_from_html(html)
     title_parts = re.split(r"\s+[-|]\s+", title)
@@ -265,7 +330,9 @@ def extract_job_from_url(
 
     return {
         "success": True,
+        "intake_status": JOB_ACTIVE,
         "message": "",
+        "next_action": "Continue ATS workflow automatically.",
         **ExtractedJobDetails(
             job_title=job_title,
             company_name=company_name,

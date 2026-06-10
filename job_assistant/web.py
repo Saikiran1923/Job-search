@@ -232,18 +232,29 @@ def create_handler(db: JobAssistantDB) -> type[BaseHTTPRequestHandler]:
                 if extracted.get("success"):
                     valid, validation_error = validate_job_details(extracted)
                     if not valid:
+                        if validation_error == "Login required. Please login manually and click Continue.":
+                            intake_status = "Login Required"
+                            next_action = "Log in manually in the browser session, then click Continue."
+                        elif validation_error == "This job appears to be closed or filled.":
+                            intake_status = "Job Closed/Filled"
+                            next_action = "Stop ATS workflow unless you manually paste a valid JD."
+                        else:
+                            intake_status = "JD Extraction Incomplete"
+                            next_action = "Paste the JD manually or upload a JD file."
                         extracted = {
                             **extracted,
                             "success": False,
+                            "intake_status": intake_status,
                             "message": validation_error,
                             "validation_error": validation_error,
+                            "next_action": next_action,
                         }
                 db.save_job_intake(
                     user["id"],
                     {
                         "job_url": job_url,
                         "source": extracted.get("source", ""),
-                        "extraction_status": "success" if extracted.get("success") else "manual_required",
+                        "extraction_status": str(extracted.get("intake_status") or ("Job Active" if extracted.get("success") else "Manual JD Required")),
                         "extraction_message": extracted.get("message", ""),
                         "job_details": extracted,
                     },

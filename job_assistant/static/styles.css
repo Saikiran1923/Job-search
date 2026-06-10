@@ -212,6 +212,11 @@ pre {
 .pipeline-step.running { border-color: var(--warning); }
 .pipeline-step.completed { border-color: var(--success); }
 .pipeline-step.failed { border-color: var(--danger); }
+.pipeline-step.login-required { border-color: var(--warning); }
+.pipeline-step.job-active { border-color: var(--success); }
+.pipeline-step.job-closed-filled { border-color: var(--danger); }
+.pipeline-step.jd-extraction-incomplete,
+.pipeline-step.manual-jd-required { border-color: var(--warning); }
 .select-row {
   display: flex;
   grid-template-columns: none;

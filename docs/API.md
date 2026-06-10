@@ -179,10 +179,34 @@ POST /api/copilot/run
 }
 ```
 
-If the URL cannot be read because of login, CAPTCHA, JavaScript rendering, or website restrictions, the API returns:
+The API does not return a generic failure for job intake. It returns `intake_status`, `message`, and `next_action`.
+
+Supported intake statuses:
 
 ```text
-Unable to extract full job details from URL. Please paste the job description manually.
+Login Required
+Job Active
+Job Closed/Filled
+JD Extraction Incomplete
+Manual JD Required
+```
+
+If login is detected:
+
+```text
+Login required. Please login manually and click Continue.
+```
+
+If the job is closed, filled, expired, or unavailable:
+
+```text
+This job appears to be closed or filled.
+```
+
+If the page opens but JD is blocked or incomplete:
+
+```text
+Unable to extract full JD from page. Please paste JD manually or upload JD file.
 ```
 
 ### ATS Prediction Score

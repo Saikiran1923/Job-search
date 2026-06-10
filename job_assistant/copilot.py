@@ -8,7 +8,17 @@ import re
 from .ats_prediction import analyze_resume_workflow, apply_approved_suggestions, predict_ats_score
 from .autofill import build_application_assist
 from .interview import generate_interview_prep
-from .job_extractor import FALLBACK_MESSAGE, extract_job_from_url
+from .job_extractor import (
+    JD_INCOMPLETE,
+    JD_INCOMPLETE_MESSAGE,
+    JOB_ACTIVE,
+    JOB_CLOSED,
+    JOB_CLOSED_MESSAGE,
+    LOGIN_REQUIRED,
+    LOGIN_REQUIRED_MESSAGE,
+    MANUAL_JD_REQUIRED,
+    extract_job_from_url,
+)
 from .portal_sessions import detect_portal
 
 
@@ -29,17 +39,27 @@ def pending_statuses() -> dict[str, str]:
 
 
 def validate_job_details(job_details: dict[str, Any]) -> tuple[bool, str]:
+    intake_status = str(job_details.get("intake_status", ""))
+    if intake_status == LOGIN_REQUIRED:
+        return False, LOGIN_REQUIRED_MESSAGE
+    if intake_status == JOB_CLOSED:
+        return False, JOB_CLOSED_MESSAGE
+    if intake_status in {JD_INCOMPLETE, MANUAL_JD_REQUIRED}:
+        return False, JD_INCOMPLETE_MESSAGE
+
     title = str(job_details.get("job_title", "")).strip().lower()
     description = str(job_details.get("full_job_description", "")).strip()
     text = f"{title}\n{description}".lower()
     invalid_titles = {"login", "sign in", "signin", "join", "jobs", "careers"}
     if title in invalid_titles:
-        return False, "Invalid job page: page title is login/sign-in or a website name."
+        return False, LOGIN_REQUIRED_MESSAGE
+    if "the job you are trying to apply for has been filled" in text or "no longer available" in text:
+        return False, JOB_CLOSED_MESSAGE
     if len(description.split()) < 45:
-        return False, "Invalid job page: full job description is missing or too short."
+        return False, JD_INCOMPLETE_MESSAGE
     sign_in_words = ["sign in", "join now", "forgot password", "create account", "login"]
     if sum(1 for word in sign_in_words if word in text) >= 2 and len(description.split()) < 120:
-        return False, "Invalid job page: content appears to be a login/search page."
+        return False, LOGIN_REQUIRED_MESSAGE
     return True, ""
 
 
@@ -54,7 +74,9 @@ def job_details_from_manual_jd(
     skills = extract_known_skills(job_description)
     return {
         "success": True,
+        "intake_status": JOB_ACTIVE,
         "message": "",
+        "next_action": "Continue ATS workflow automatically.",
         "job_title": job_title,
         "company_name": company_name,
         "job_url": job_url,
@@ -82,11 +104,16 @@ def run_manual_pipeline(
     auto_run_after_intake: bool = True,
 ) -> dict[str, Any]:
     statuses = pending_statuses()
-    statuses["Extract Job Details"] = "Completed"
+    statuses["Extract Job Details"] = str(job_details.get("intake_status") or JOB_ACTIVE)
 
     valid, validation_error = validate_job_details(job_details)
-    statuses["Validate JD"] = "Completed" if valid else "Failed"
+    statuses["Validate JD"] = "Completed" if valid else str(job_details.get("intake_status") or MANUAL_JD_REQUIRED)
     if not valid:
+        job_details = {
+            **job_details,
+            "message": job_details.get("message") or validation_error,
+            "next_action": job_details.get("next_action") or "Paste the JD manually or upload a JD file.",
+        }
         return db.create_pipeline_run(
             user_id,
             {
@@ -224,7 +251,14 @@ def extract_or_manual_job(job_url: str = "", manual_jd: str = "", **metadata: st
             job_title=metadata.get("job_title") or "Manual Job",
             company_name=metadata.get("company_name") or "",
         )
-    return {"success": False, "message": FALLBACK_MESSAGE, "job_url": job_url, "source": detect_portal(job_url)}
+    return {
+        "success": False,
+        "intake_status": MANUAL_JD_REQUIRED,
+        "message": JD_INCOMPLETE_MESSAGE,
+        "next_action": "Paste the JD manually or upload a JD file.",
+        "job_url": job_url,
+        "source": detect_portal(job_url),
+    }
 
 
 def _section_lines(text: str, headings: list[str]) -> list[str]:

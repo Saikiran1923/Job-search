@@ -85,8 +85,7 @@ Estimated saving: 60-75%
 - No portal usernames or passwords are stored.
 - Reads job postings from JSON exports or manually saved job descriptions.
 - Extracts visible job details from a user-pasted URL when access is allowed.
-- Shows the exact fallback message when URL extraction is blocked:
-  - `Unable to extract full job details from URL. Please paste the job description manually.`
+- Shows specific intake status and next action for login-required, active, closed/filled, incomplete JD, and manual-JD-required pages.
 - Extracts required skills and high-signal keywords.
 - Compares each job with the stored candidate profile.
 - Calculates original and optimized `ATS Prediction Score` values using weighted scoring:
@@ -292,18 +291,29 @@ Auto-run full workflow after job intake is ON by default. The pipeline progress 
 - Application Assist
 - Save Tracker
 
-Statuses:
+General pipeline statuses:
 
 - Pending
 - Running
 - Completed
-- Failed
+
+Job intake itself uses reason-specific labels instead of a generic failure label.
 
 If the page cannot be read, the dashboard shows:
 
 ```text
-Unable to extract full job details from URL. Please paste the job description manually.
+Unable to extract full JD from page. Please paste JD manually or upload JD file.
 ```
+
+Job intake statuses:
+
+- `Login Required` — shows `Login required. Please login manually and click Continue.`
+- `Job Active` — extraction succeeded and ATS workflow can continue.
+- `Job Closed/Filled` — shows `This job appears to be closed or filled.`
+- `JD Extraction Incomplete` — asks the user to paste JD manually or upload a JD file.
+- `Manual JD Required` — no usable URL/JD was available.
+
+The app never shows only `Failed` for job intake; it gives a reason and next action.
 
 Extracted fields include:
 

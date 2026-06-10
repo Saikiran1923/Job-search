@@ -98,6 +98,24 @@ class ManualCopilotTests(unittest.TestCase):
         invalid = {"job_title": "Sign In", "full_job_description": "Forgot password login join now"}
         self.assertFalse(validate_job_details(invalid)[0])
 
+    def test_closed_job_pipeline_status_is_not_failed(self) -> None:
+        db, user_id, tmpdir = self._db_user()
+        self.addCleanup(tmpdir.cleanup)
+        job = {
+            "success": False,
+            "intake_status": "Job Closed/Filled",
+            "message": "This job appears to be closed or filled.",
+            "job_title": "Data Engineer",
+            "company_name": "Example",
+            "job_url": "https://example.com/filled",
+            "full_job_description": "The job you are trying to apply for has been filled.",
+        }
+
+        run = run_manual_pipeline(db, user_id, job, RESUME)
+
+        self.assertEqual(run["statuses"]["Validate JD"], "Job Closed/Filled")
+        self.assertNotIn("Failed", run["statuses"].values())
+
     def test_valid_jd_pipeline_auto_run_and_tracker_creation(self) -> None:
         db, user_id, tmpdir = self._db_user()
         self.addCleanup(tmpdir.cleanup)

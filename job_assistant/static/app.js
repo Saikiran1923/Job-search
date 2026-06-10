@@ -265,7 +265,8 @@ function renderPipeline(statuses = {}) {
   const steps = ["Extract Job Details", "Validate JD", "ATS Before Score", "Resume Suggestions", "ATS After Score", "Interview Questions", "Application Assist", "Save Tracker"];
   document.getElementById("pipelineProgress").innerHTML = steps.map((step) => {
     const status = statuses[step] || "Pending";
-    return `<div class="pipeline-step ${status.toLowerCase()}"><span>${escapeHtml(step)}</span><strong>${escapeHtml(status)}</strong></div>`;
+    const statusClass = status.toLowerCase().replaceAll(" ", "-").replaceAll("/", "-");
+    return `<div class="pipeline-step ${statusClass}"><span>${escapeHtml(step)}</span><strong>${escapeHtml(status)}</strong></div>`;
   }).join("");
 }
 
@@ -367,8 +368,9 @@ document.getElementById("jobExtractForm").addEventListener("submit", async (even
     lastJobDetails = job_details;
     document.getElementById("jobExtractOutput").textContent = JSON.stringify(job_details, null, 2);
     if (job_details.full_job_description) document.getElementById("manualJobDescription").value = job_details.full_job_description;
+    toast(job_details.message || job_details.intake_status || "Job intake complete");
     if (document.getElementById("autoRunWorkflow").checked && job_details.success) {
-      renderPipeline({ "Extract Job Details": "Completed", "Validate JD": "Running" });
+      renderPipeline({ "Extract Job Details": job_details.intake_status || "Job Active", "Validate JD": "Running" });
       const pipelineResult = await api("/api/copilot/run", {
         method: "POST",
         body: JSON.stringify({ job_details, resume_text: lastResumeText, auto_run: true }),
@@ -381,7 +383,10 @@ document.getElementById("jobExtractForm").addEventListener("submit", async (even
       }
       await refreshAll();
     } else if (!job_details.success) {
-      renderPipeline({ "Extract Job Details": "Failed", "Validate JD": "Pending" });
+      renderPipeline({
+        "Extract Job Details": job_details.intake_status || "Manual JD Required",
+        "Validate JD": job_details.intake_status || "Manual JD Required",
+      });
     }
     await refreshQuestions();
   } catch (error) { toast(error.message); }

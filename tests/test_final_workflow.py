@@ -9,7 +9,16 @@ from job_assistant.ats_prediction import (
 )
 from job_assistant.database import JobAssistantDB
 from job_assistant.interview import generate_interview_prep
-from job_assistant.job_extractor import FALLBACK_MESSAGE, extract_job_from_url
+from job_assistant.job_extractor import (
+    JD_INCOMPLETE,
+    JD_INCOMPLETE_MESSAGE,
+    JOB_ACTIVE,
+    JOB_CLOSED,
+    JOB_CLOSED_MESSAGE,
+    LOGIN_REQUIRED,
+    LOGIN_REQUIRED_MESSAGE,
+    extract_job_from_url,
+)
 
 
 JOB_DETAILS = {
@@ -45,7 +54,46 @@ class FinalWorkflowTests(unittest.TestCase):
         )
 
         self.assertFalse(result["success"])
-        self.assertEqual(result["message"], FALLBACK_MESSAGE)
+        self.assertEqual(result["intake_status"], JD_INCOMPLETE)
+        self.assertEqual(result["message"], JD_INCOMPLETE_MESSAGE)
+
+    def test_login_required_status(self) -> None:
+        result = extract_job_from_url(
+            "https://example.test/login",
+            fetcher=lambda _: "<html><title>Sign In</title><body>Sign in Forgot password Join now to continue</body></html>",
+        )
+
+        self.assertFalse(result["success"])
+        self.assertEqual(result["intake_status"], LOGIN_REQUIRED)
+        self.assertEqual(result["message"], LOGIN_REQUIRED_MESSAGE)
+
+    def test_job_closed_filled_status(self) -> None:
+        result = extract_job_from_url(
+            "https://example.test/filled",
+            fetcher=lambda _: "<html><title>Job Filled</title><body>The job you are trying to apply for has been filled.</body></html>",
+        )
+
+        self.assertFalse(result["success"])
+        self.assertEqual(result["intake_status"], JOB_CLOSED)
+        self.assertEqual(result["message"], JOB_CLOSED_MESSAGE)
+
+    def test_active_job_status(self) -> None:
+        html = """
+        <html><head><title>Data Engineer - Example Analytics</title></head>
+        <body>
+        <h1>Data Engineer</h1>
+        <section>Responsibilities: Build data pipelines and partner with analysts.</section>
+        <section>Required Qualifications: Python SQL Airflow Spark AWS ETL data warehouse
+        data quality experience with agile teams and production analytics workflows.</section>
+        <section>Preferred Qualifications: dashboards, stakeholder communication, and documentation.</section>
+        <p>This full-time remote role includes benefits and a salary range of $100,000 - $130,000 per year.</p>
+        </body></html>
+        """
+        result = extract_job_from_url("https://example.test/active", fetcher=lambda _: html)
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["intake_status"], JOB_ACTIVE)
+        self.assertIn("Python", result["full_job_description"])
 
     def test_ats_before_and_after_score(self) -> None:
         before = predict_ats_score(RESUME, JOB_DETAILS)
